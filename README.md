@@ -6,6 +6,8 @@ TO DO: Add badges.
 
 A command line interface for automatically extracting relevant metadata from code repositories (readme, configuration files, documentation, etc.).
 
+This repository is extracted from https://github.com/KnowledgeCaptureAndDiscovery/somef/
+
 
 **Authors:** Daniel Garijo, Allen Mao, Miguel Ángel García Delgado, Haripriya Dharmala, Vedant Diwanji, Jiaying Wang, Aidan Kelley, Jenifer Tabita Ciuciu-Kiss, Luca Angheluta and Juanje Mendoza.
 
