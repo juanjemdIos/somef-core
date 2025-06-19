@@ -1,13 +1,11 @@
-# Software Metadata Extraction Framework (SOMEF)
+# Software Metadata Extraction Framework CORE (SOMEF-core)
 
-[![Documentation Status](https://readthedocs.org/projects/somef/badge/?version=latest)](https://somef.readthedocs.io/en/latest/?badge=latest)
-[![Python](https://img.shields.io/pypi/pyversions/somef.svg?style=plastic)](https://badge.fury.io/py/somef) [![PyPI](https://badge.fury.io/py/somef.svg)](https://badge.fury.io/py/somef) [![DOI](https://zenodo.org/badge/190487675.svg)](https://zenodo.org/badge/latestdoi/190487675) [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/KnowledgeCaptureAndDiscovery/somef/HEAD?filepath=notebook%2FSOMEF%20Usage%20Example.ipynb) [![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+TO DO: Add badges.
 
 <img src="docs/logo.png" alt="logo" width="150"/>
 
 A command line interface for automatically extracting relevant metadata from code repositories (readme, configuration files, documentation, etc.).
 
-**Demo:** See a [demo running somef as a service](https://somef.linkeddata.es), through the [SOMEF-Vider tool](https://github.com/SoftwareUnderstanding/SOMEF-Vider/).
 
 **Authors:** Daniel Garijo, Allen Mao, Miguel Ángel García Delgado, Haripriya Dharmala, Vedant Diwanji, Jiaying Wang, Aidan Kelley, Jenifer Tabita Ciuciu-Kiss, Luca Angheluta and Juanje Mendoza.
 
@@ -16,13 +14,6 @@ A command line interface for automatically extracting relevant metadata from cod
 Given a readme file (or a GitHub/Gitlab repository) SOMEF will extract the following categories (if present), listed in alphabetical order:
 
 - **Acknowledgement**: Text acknowledging funding sources or contributors
-- **Application domain**: The application domain of the repository. Current supported domains include: Astrophysics, Audio, Computer vision, Graphs, Natural language processing, Reinforcement learning, Semantc web, Sequential. Domains are not mutually exclusive. These domains have been extracted from [awesome lists](https://github.com/topics/awesome-list) and [Papers with code](https://paperswithcode.com/). Find more information in our [documentation](https://somef.readthedocs.io/en/latest/)
-- **Authors**: Person(s) or organization(s) responsible for the project. We recognize the following properties:
-  - Name: name of the author (including last name)
-  - Given name: First name of an author
-  - Family name: Last name of an author
-  - Email: email of author
-  - URL: website or ORCID associated with the author
 - **Build file**: Build file(s) of the project. For example, files used to create a Docker image for the target software, package files, etc.
 - **Citation**: Preferred citation as the authors have stated in their readme file. SOMEF recognizes Bibtex, Citation File Format files and other means by which authors cite their papers (e.g., by in-text citation). We aim to recognize the following properties:
   - Title: Title of the publication
@@ -56,7 +47,6 @@ Given a readme file (or a GitHub/Gitlab repository) SOMEF will extract the follo
 - **License**: License and usage terms of a software component
 - **Logo**: Main logo used to represent the target software component
 - **Name**: Name identifying a software component
-- **Ontologies**: URL and path to the ontology files present in the repository
 - **Owner**: Name and type of the user or organization in charge of the repository
 - **Package distribution**: Links to package sites like pypi in case the repository has a package available.
 - **Package files**: Links to package files used to wrap the project in a package.
@@ -74,22 +64,18 @@ Given a readme file (or a GitHub/Gitlab repository) SOMEF will extract the follo
   - Link to the tarball zip and code of the release 
 - **Repository status**: Repository status as it is described in [repostatus.org](https://www.repostatus.org/).
 - **Requirements**: Pre-requisites and dependencies needed to execute a software component
-- **Run**: Running instructions of a software component. It may be wider than the `invocation` category, as it may include several steps and explanations.
-- **Script files**: Bash script files contained in the repository
 - **Stargazers count**: Total number of stargazers of the project
 - **Support**: Guidelines and links of where to obtain support for a software component
 - **Support channels**: Help channels one can use to get support about the target software component
-- **Type**: type of software (command line application, notebook, ontology, scientific workflow, etc.)
 - **Usage examples**: Assumptions and considerations recorded by the authors when executing a software component, or examples on how to use it
-- **Workflows**: URL and path to the computational workflow files present in the repository
 
 We use different supervised classifiers, header analysis, regular expressions, the GitHub/Gitlab API to retrieve all these fields (more than one technique may be used for each field) and language specific metadata parsers (e.g., for package files). Each extraction records its provenance, with the confidence and technique used on each step. For more information check the [output format description](https://somef.readthedocs.io/en/latest/output/)
 
 ## Documentation
 
-See full documentation at [https://somef.readthedocs.io/en/latest/](https://somef.readthedocs.io/en/latest/)
+We are working on  this
 
-## Cite SOMEF:
+## Cite SOMEF and SOMEF-core:
 
 Journal publication (preferred):
 
@@ -132,20 +118,16 @@ If you face any issues when installing SOMEF, please make sure you have installe
 
 ## Install from Pypi
 
-SOMEF [is available in Pypi!](https://pypi.org/project/somef/) To install it just type:
-
-```
-pip install somef
-```
+We are currently working on this
 
 ## Install from GitHub
 
-To run SOMEF, please follow the next steps:
+To run somef_core, please follow the next steps:
 
 Clone this GitHub repository
 
 ```
-git clone https://github.com/KnowledgeCaptureAndDiscovery/somef.git
+git clone https://github.com/KnowledgeCaptureAndDiscovery/somef-core.git
 ```
 
 We use [Poetry](https://python-poetry.org/) to ensure library compatibility. It can be installed as follows:
@@ -156,7 +138,7 @@ curl -sSL https://install.python-poetry.org | python3 -
 
 This option is recommended over installing Poetry with pip install.
 
-Now Poetry will handle the installation of SOMEF and all its dependencies configured in the `toml` file.
+Now Poetry will handle the installation of SOMEF-core and all its dependencies configured in the `toml` file.
 
 To test the correct installation of poetry run:
 
@@ -167,7 +149,7 @@ poetry --version
 Install somef and all their dependencies.
 
 ```
-cd /somef
+cd /somef-core
 poetry install
 ```
 
@@ -189,7 +171,7 @@ somef --help
 If everything goes fine, you should see:
 
 ```bash
-Usage: somef [OPTIONS] COMMAND [ARGS]...
+Usage: somef_core [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -h, --help  Show this message and exit.
@@ -202,38 +184,14 @@ Commands:
 
 ## Installing through Docker
 
-We provide a Docker image with SOMEF already installed. To run through Docker, you may build the Dockerfile provided in the repository by running:
-
-```bash
-docker build -t somef .
-```
-
-Or just use the Docker image already built in [DockerHub](https://hub.docker.com/r/kcapd/somef):
-
-```bash
-docker pull kcapd/somef
-```
-
-Then, to run your image just type:
-
-```bash
-docker run --rm -it kcapd/somef 
-```
-
-And you will be ready to use SOMEF (see section below). If you want to have access to the results we recommend [mounting a volume](https://docs.docker.com/storage/volumes/). For example, the following command will mount the current directory as the `out` folder in the Docker image:
-
-```bash
-docker run -it --rm -v $PWD/:/out kcapd/somef 
-```
-
-If you move any files produced by somef into `/out`, then you will be able to see them in your current directory.
+We are working on this section
 
 ## Configure
 
 Before running SOMEF for the first time, you must **configure** it appropriately (you only need to do this once). Run:
 
 ```bash
-somef configure
+somef_core configure
 ```
 
 And you will be asked to provide the following:
@@ -244,19 +202,19 @@ And you will be asked to provide the following:
 If you want somef to be automatically configured (without GitHUb authentication key and using the default classifiers) just type:
 
 ```bash
-somef configure -a
+somef_core configure -a
 ```
 
 For showing help about the available options, run:
 
 ```bash
-somef configure --help
+somef_core configure --help
 ```
 
 Which displays:
 
 ```bash
-Usage: somef configure [OPTIONS]
+Usage: somef_core configure [OPTIONS]
 
   Configure GitHub credentials and classifiers file path
 
@@ -265,21 +223,17 @@ Options:
   -h, --help  Show this message and exit.
 ```
 
-### Updating SOMEF
-
-If you update SOMEF to a newer version, we recommend you `configure` again the library (by running `somef configure`). The rationale is that different versions may rely on classifiers which may be stored in a different path.
 
 ## Usage
 
 ```bash
-$ somef describe --help
+$ somef_core describe --help
   SOMEF Command Line Interface
-Usage: somef describe [OPTIONS]
+Usage: somef_core describe [OPTIONS]
 
   Running the Command Line Interface
 
 Options:
-  -t, --threshold FLOAT           Threshold to classify the text  [required]
   Input: [mutually_exclusive, required]
     -r, --repo_url URL            Github/Gitlab Repository URL
     -d, --doc_src PATH            Path to the README file source
@@ -291,15 +245,6 @@ Options:
                                   output will be in JSON
 
     -c, --codemeta_out PATH       Path to an output codemeta file
-    -g, --graph_out PATH          Path to the output Knowledge Graph export
-                                  file. If supplied, the output will be a
-                                  Knowledge Graph, in the format given in the
-                                  --format option chosen (turtle, json-ld)
-
-  -f, --graph_format [turtle|json-ld]
-                                  If the --graph_out option is given, this is
-                                  the format that the graph will be stored in
-
   -p, --pretty                    Pretty print the JSON output file so that it
                                   is easy to compare to another JSON output
                                   file.
@@ -323,19 +268,9 @@ Options:
 The following command extracts all metadata available from [https://github.com/dgarijo/Widoco/](https://github.com/dgarijo/Widoco/).
 
 ```bash
-somef describe -r https://github.com/dgarijo/Widoco/ -o test.json -t 0.8
+somef_core describe -r https://github.com/dgarijo/Widoco/ -o test.json 
 ```
-
-Try SOMEF in Binder with our sample notebook: [![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/KnowledgeCaptureAndDiscovery/somef/HEAD?filepath=notebook%2FSOMEF%20Usage%20Example.ipynb)
 
 ## Contribute:
 
 If you want to contribute with a pull request, please do so by submitting it to the `dev` branch.
-
-## Next features:
-
-To see upcoming features, please have a look at our [open issues](https://github.com/KnowledgeCaptureAndDiscovery/somef/issues) and [milestones](https://github.com/KnowledgeCaptureAndDiscovery/somef/milestones)
-
-## Extending SOMEF categories:
-
-To run a classifier with an additional category or remove an existing one, a corresponding path entry in the config.json should be provided and the category type should be added/removed in the category variable in `cli.py`.
