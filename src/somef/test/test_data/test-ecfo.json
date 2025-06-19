@@ -1,0 +1,383 @@
+{
+  "citation": [
+    {
+      "confidence": 1,
+      "result": {
+        "author": [
+          {
+            "family_name": "Markovic",
+            "given_name": "Milan",
+            "name": "Milan Markovic",
+            "type": "Agent",
+            "url": "https://orcid.org/0000-0002-5477-287X"
+          },
+          {
+            "family_name": "Garijo",
+            "given_name": "Daniel",
+            "name": "Daniel Garijo",
+            "type": "Agent",
+            "url": "https://orcid.org/0000-0003-0454-7145"
+          },
+          {
+            "family_name": "Germano",
+            "given_name": "Stefano",
+            "name": "Stefano Germano",
+            "type": "Agent",
+            "url": "https://orcid.org/0000-0001-6993-0618"
+          },
+          {
+            "family_name": "Naja",
+            "given_name": "Iman",
+            "name": "Iman Naja",
+            "type": "Agent",
+            "url": "https://orcid.org/0000-0001-6634-3266"
+          }
+        ],
+        "datePublished": "2023",
+        "doi": "10.5281/zenodo.7916079",
+        "format": "cff",
+        "title": "ECFO - Emission Conversion Factors Ontology",
+        "type": "File_dump",
+        "url": "https://doi.org/10.5281/zenodo.7916079",
+        "value": "cff-version: 1.2.0\ntitle: ECFO - Emission Conversion Factors Ontology\nmessage: 'If you use this resource, please cite it as below.'\ntype: software\nauthors:\n  - family-names: Markovic\n    given-names: Milan\n    orcid: 'https://orcid.org/0000-0002-5477-287X'\n  - family-names: Garijo\n    given-names: Daniel\n    orcid: 'https://orcid.org/0000-0003-0454-7145'\n  - family-names: Germano\n    given-names: Stefano\n    orcid: 'https://orcid.org/0000-0001-6993-0618'\n  - family-names: Naja\n    given-names: Iman\n    orcid: 'https://orcid.org/0000-0001-6634-3266'\nurl: 'https://w3id.org/ecfo'\nversion: 1.0.0\ndate-released: '2023-05-09'\ndoi: 10.5281/zenodo.7916079\npreferred-citation:\n  authors:\n    - family-names: Markovic\n      given-names: Milan\n      orcid: 'https://orcid.org/0000-0002-5477-287X'\n    - family-names: Garijo\n      given-names: Daniel\n      orcid: 'https://orcid.org/0000-0003-0454-7145'\n    - family-names: Germano\n      given-names: Stefano\n      orcid: 'https://orcid.org/0000-0001-6993-0618'\n    - family-names: Naja\n      given-names: Iman\n      orcid: 'https://orcid.org/0000-0001-6634-3266'\n  title: \"TEC: Transparent Emissions Calculation Toolkit\"\n  type: article\n  year: 2023\n  doi: 10.1007/978-3-031-47243-5_5\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/CITATION.cff",
+      "technique": "file_exploration"
+    }
+  ],
+  "code_repository": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://github.com/TEC-Toolkit/ECFO"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "contributing_guidelines": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "File_dump",
+        "value": "# How to contribute\n\nThank you for investing your time in contributing to the ECFO ontology!\n\nTo get an overview of the project, please read the [README](README.md).\n\n### Issues\n\n#### Create a new issue\n\nIf you spot a problem or want to suggest a new term or use case, [search if it already exists in our issue tracker](https://github.com/TEC-Toolkit/ECFO/issues).\nIf a related issue does not exist, you can open a new issue here on GitHub.\n\n### Proposing new changes to the ontology\n1. Edit the ontology using your favorite program. The latest version of the ontology can be found in the `development` folder.\n2. Don't forget to add the motivation of your change, as well as metadata for the terms you would like to include\n\n#### Make changes locally\n\n1. Fork the repository.\n   - Using GitHub Desktop:\n     - [Getting started with GitHub Desktop](https://docs.github.com/en/desktop/installing-and-configuring-github-desktop/getting-started-with-github-desktop) will guide you through setting up Desktop.\n     - Once Desktop is set up, you can use it to [fork the repo](https://docs.github.com/en/desktop/installing-and-configuring-github-desktop/getting-started-with-github-desktop)!\n   - Using the command line:\n     - [Fork the repo](https://docs.github.com/en/github/getting-started-with-github/fork-a-repo#fork-an-example-repository) so that you can make your changes without affecting the original project until you're ready to merge them.\n2. Create a working branch and start with your changes!\n\n### Commit your update\n\nCommit the changes once you are happy with them.\n\nAlways write a clear log message for your commits.\nOne-line messages are fine for small changes.\n\n### Pull Request\n\nWhen you're finished with the changes, create a pull request, also known as a PR.\n\n- Link your PR to the issue it addresses.\n- Push your PR to the `dev` branch. One of the members of the team will merge it in the main branch.\n\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/CONTRIBUTING.md",
+      "technique": "file_exploration"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Contributing",
+        "type": "Text_excerpt",
+        "value": "Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on the process for submitting pull requests to us. Remember that the last version of the ontology can be found in the `development` folder\n\n---\n\n<div style=\"text-align: center\">\n\n  This ontology is part of the [TEC-Toolkit](https://github.com/TEC-Toolkit).\n\n  <img src=\"https://tec-toolkit.github.io/assets/Logo%20TEC.svg\" alt=\"TEC-Toolkit Logo\" width=5%/>\n\n</div>\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md",
+      "technique": "header_analysis"
+    }
+  ],
+  "date_created": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Date",
+        "value": "2022-11-15T14:30:47Z"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "date_updated": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Date",
+        "value": "2025-05-02T13:29:44Z"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "description": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "The Emission Conversion Factor Ontology"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "download_url": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://github.com/Tec-Toolkit/ECFO/releases"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "forks_count": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Number",
+        "value": 1
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "forks_url": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://api.github.com/repos/TEC-Toolkit/ECFO/forks"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "full_name": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "TEC-Toolkit/ECFO"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "identifier": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://zenodo.org/badge/latestdoi/566369718"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "issue_tracker": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://api.github.com/repos/TEC-Toolkit/ECFO/issues"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "keywords": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "climate-change, conversion-factor, emission-conversion-factor, ontology"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "license": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "File_dump",
+        "value": "This work is licensed under the Creative Commons Attribution 4.0 International License. To view a copy of this license, visit http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative Commons, PO Box 1866, Mountain View, CA 94042, USA.\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/LICENSE.md",
+      "technique": "file_exploration"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "License",
+        "type": "Text_excerpt",
+        "value": "This project is licensed under the Creative Commons Attribution 4.0 International License - see the [LICENSE.md](LICENSE.md) file for details.\n\n\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md",
+      "technique": "header_analysis"
+    }
+  ],
+  "logo": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://tec-toolkit.github.io/assets/Logo%20TEC.svg"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "name": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "ECFO"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "owner": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Organization",
+        "value": "TEC-Toolkit"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "programming_languages": [
+    {
+      "confidence": 1,
+      "result": {
+        "name": "JavaScript",
+        "size": 3303615,
+        "type": "Programming_language",
+        "value": "JavaScript"
+      },
+      "technique": "GitHub_API"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "HTML",
+        "size": 277847,
+        "type": "Programming_language",
+        "value": "HTML"
+      },
+      "technique": "GitHub_API"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "CSS",
+        "size": 176942,
+        "type": "Programming_language",
+        "value": "CSS"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "readme_url": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md"
+      },
+      "technique": "file_exploration"
+    }
+  ],
+  "releases": [
+    {
+      "confidence": 1,
+      "result": {
+        "author": {
+          "name": "dgarijo",
+          "type": "User"
+        },
+        "date_created": "2023-05-09T16:14:42Z",
+        "date_published": "2023-05-09T16:53:17Z",
+        "description": "This release fixed minor issues in the annotations, and adds full metadata about the ontology.",
+        "html_url": "https://github.com/TEC-Toolkit/ECFO/releases/tag/1.0.0",
+        "name": "ECFO 1.0.0: Release with metadata and documentation",
+        "release_id": 102378234,
+        "tag": "1.0.0",
+        "tarball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/tarball/1.0.0",
+        "type": "Release",
+        "url": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/102378234",
+        "value": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/102378234",
+        "zipball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/zipball/1.0.0"
+      },
+      "technique": "GitHub_API"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "author": {
+          "name": "dgarijo",
+          "type": "User"
+        },
+        "date_created": "2023-04-20T14:55:40Z",
+        "date_published": "2023-04-20T14:57:56Z",
+        "description": "This new release completes the CQs, homogeneizes properties and defines new ones to specify what a CF is converting and what it is converting to (e.g., Butane -> CO2)",
+        "html_url": "https://github.com/TEC-Toolkit/ECFO/releases/tag/0.0.2",
+        "name": "ECFO 0.0.2: New properties for emission source and target ",
+        "release_id": 100216030,
+        "tag": "0.0.2",
+        "tarball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/tarball/0.0.2",
+        "type": "Release",
+        "url": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/100216030",
+        "value": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/100216030",
+        "zipball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/zipball/0.0.2"
+      },
+      "technique": "GitHub_API"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "author": {
+          "name": "dgarijo",
+          "type": "User"
+        },
+        "date_created": "2023-04-05T20:17:42Z",
+        "date_published": "2023-04-20T10:12:19Z",
+        "description": "Release of the first version of ECFO, published at https://w3id.org/ecfo/0.0.1",
+        "html_url": "https://github.com/TEC-Toolkit/ECFO/releases/tag/0.0.1",
+        "name": "First version of ECFO",
+        "release_id": 100176341,
+        "tag": "0.0.1",
+        "tarball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/tarball/0.0.1",
+        "type": "Release",
+        "url": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/100176341",
+        "value": "https://api.github.com/repos/TEC-Toolkit/ECFO/releases/100176341",
+        "zipball_url": "https://api.github.com/repos/TEC-Toolkit/ECFO/zipball/0.0.1"
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "somef_missing_categories": [
+    "installation",
+    "acknowledgement",
+    "run",
+    "download",
+    "requirements",
+    "contact",
+    "contributors",
+    "documentation",
+    "faq",
+    "support",
+    "has_build_file",
+    "executable_example"
+  ],
+  "somef_provenance": {
+    "date": "2025-06-18 10:10:37",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.11"
+  },
+  "stargazers_count": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Number",
+        "value": 1
+      },
+      "technique": "GitHub_API"
+    }
+  ],
+  "usage": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Getting Started",
+        "type": "Text_excerpt",
+        "value": "This ontology is available at [https://w3id.org/ecfo#](https://w3id.org/ecfo#) with content negotiation in RDF/XML, TTL, JSON-LD and N-Triples.\n\nTo download the ontology in different serializations, you can use a curl command like:\n\n```sh\ncurl -sH \"Accept:text/turtle\" -L https://w3id.org/ecfo#\n```\n\nTo see the documentation of the ontology, just open its URI on a browser.\n\n\n"
+      },
+      "source": "https://raw.githubusercontent.com/Tec-Toolkit/ECFO/main/README.md",
+      "technique": "header_analysis"
+    }
+  ]
+}

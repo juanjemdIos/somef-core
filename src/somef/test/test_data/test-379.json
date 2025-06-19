@@ -1,0 +1,62 @@
+{
+  "full_title": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "r.AID.ologist \ud83d\udd8a\ufe0f"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "images": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://i.ibb.co/7Y4ZyhR/Global-Diagram.png"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "installation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "\ud83d\uddb1\ufe0f **Installation**",
+        "parent_header": [
+          "r.AID.ologist \ud83d\udd8a\ufe0f"
+        ],
+        "type": "Text_excerpt",
+        "value": "A ready-to-use version of the framework is available as a Docker image in **elviish/raidologist:latest**. Once downloaded, the image can be ran with the command:\n\n    docker run --name raidologist -p *selected_port*:5000 elviish/raidologist:latest\n  \nThe framework has been developed using Python 3.7. To locally run the framework,  or o modify it, these are the steps to follow:\n\n 1. Clone the repository\n `git clone https://github.com/oeg-upm/AI4EU_raidologist.git`\n \n 2. Install the required dependencies\n `pip install -r requirements.txt`\n \n 3. Install the spacy model\n `python -m spacy download en_core_web_sm`\n \n 4. Download the NER model and place it the directory *externals/i2b2*\n`curl -O https://drive.upm.es/s/gOXyNxXgnrDBIEj/download`\n\n 5. Execute the *main.py* file \n`python main.py`\n\n 6. Go to the direction localhost:5000 in your web browser to start using the framework\n\nIssues can be reported at https://github.com/oeg-upm/AI4EU_raidologist/issues\n"
+      },
+      "technique": "header_analysis"
+    }
+  ],
+  "somef_missing_categories": [
+    "citation",
+    "acknowledgement",
+    "run",
+    "download",
+    "requirements",
+    "contact",
+    "description",
+    "contributors",
+    "documentation",
+    "license",
+    "usage",
+    "faq",
+    "support",
+    "identifier",
+    "has_build_file",
+    "executable_example",
+    "keywords"
+  ],
+  "somef_provenance": {
+    "date": "2025-06-17 15:28:28",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.11"
+  }
+}

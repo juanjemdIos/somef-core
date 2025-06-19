@@ -1,0 +1,288 @@
+{
+  "citation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Citation",
+        "type": "Text_excerpt",
+        "value": "```latex\n@inproceedings{\n  author    = {Julien Leblay and Melisachew Wudage Chekol and Xin Liu},\n  title     = {Towards Temporal Knowledge Graph Embeddings with Arbitrary Time Precision},\n  booktitle = {Proceedings of the 29th {ACM} International Conference on Information and Knowledge Management ({CIKM} '20), October 19--23, 2020, Virtual Event, Ireland},\n  publisher = {{ACM}},\n  year      = {2020},\n  url       = {https://doi.org/10.1145/3340531.3412028},\n  doi       = {10.1145/3340531.3412028},\n}\n```\n"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "header_analysis"
+    }
+  ],
+  "code_repository": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://gitlab.com/jleblay/tokei/"
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "download_url": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://gitlab.com/jleblay/tokei/-/branches"
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "forks_count": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Number",
+        "value": 1
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "full_title": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "ToKEi: Temporal Knowledge Graph Embeddings with Arbitrary Time Precision"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "has_build_file": [
+    {
+      "confidence": 1,
+      "result": {
+        "format": "requirements.txt",
+        "type": "Url",
+        "value": "https:///jleblay/tokei/-/blob/master/requirements.txt"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "file_exploration"
+    }
+  ],
+  "keywords": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "knowledge graphs, representation learning, temporal knowledge"
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "license": [
+    {
+      "confidence": 1,
+      "result": {
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "type": "Url",
+        "value": "https://gitlab.com/jleblay/tokei/-/raw/master/LICENSE"
+      },
+      "technique": "GitLab_API"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "MIT License",
+        "spdx_id": "MIT",
+        "type": "File_dump",
+        "value": "MIT License\n\nCopyright (c) 2020 Julien Leblay\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the \"Software\"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.\n"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/LICENSE",
+      "technique": "file_exploration"
+    }
+  ],
+  "readme_url": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md"
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "requirements": [
+    {
+      "confidence": 1,
+      "result": {
+        "name": "bidict",
+        "type": "Software_application",
+        "value": "bidict==0.18.0",
+        "version": "==0.18.0"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "joblib",
+        "type": "Software_application",
+        "value": "joblib==0.13.2",
+        "version": "==0.13.2"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "numpy",
+        "type": "Software_application",
+        "value": "numpy==1.17.0",
+        "version": "==1.17.0"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "pandas",
+        "type": "Software_application",
+        "value": "pandas==0.25.1",
+        "version": "==0.25.1"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "python-dateutil",
+        "type": "Software_application",
+        "value": "python-dateutil==2.8.0",
+        "version": "==2.8.0"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "pytz",
+        "type": "Software_application",
+        "value": "pytz==2019.2",
+        "version": "==2019.2"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "scikit-learn",
+        "type": "Software_application",
+        "value": "scikit-learn==0.21.3",
+        "version": "==0.21.3"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "six",
+        "type": "Software_application",
+        "value": "six==1.12.0",
+        "version": "==1.12.0"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "sklearn",
+        "type": "Software_application",
+        "value": "sklearn==1.1.2",
+        "version": "==1.1.2"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "name": "torch",
+        "type": "Software_application",
+        "value": "torch==1.2.0",
+        "version": "==1.2.0"
+      },
+      "source": "https:///jleblay/tokei/-/blob/master/requirements.txt",
+      "technique": "code_parser"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Requirements",
+        "type": "Text_excerpt",
+        "value": "The model is implemented in Python 3, using the PyTorch library.\nOther library requirements are listed in `requirements.txt`.\nTo load them into your preference virtual execution environment, use:\n\n    pip install -r requirements.txt\n"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "header_analysis"
+    }
+  ],
+  "somef_provenance": {
+    "date": "2025-06-17 15:27:51",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.11"
+  },
+  "stargazers_count": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Number",
+        "value": 1
+      },
+      "technique": "GitLab_API"
+    }
+  ],
+  "usage": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Pre-training",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python RotatE/run.py                \\\n            --cuda                                             \\\n            --do_train                                         \\\n            --do_valid                                         \\\n            --do_test                                          \\\n            --ignore_dict                                      \\\n            --data_path data/RotatE/wikidata12k                \\\n            --model RotatE                                     \\\n            -n 256 -b 1024 -d 1000                             \\\n            -g 24.0 -a 1.0 -adv                                \\\n            -lr 0.0001 --max_steps 150000                      \\\n            -save models/RotatE_WD12k --test_batch_size 16 -de\n```\nFor a complete list of options, try:\n\n    python run.py --help\n\n"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Training temporal models",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python train.py \n            --seed 0 --data_path data/wikidata12k              \\\n            -n 128 -b 1024 -p 15000 -wu 5000                   \\\n            -a 1.0 -lr 0.0001 --max_steps 45000                \\\n            -save models/RotatE_WD12k_CDY --test_batch_size 16 \\\n            -scope d1100_1_1,d2019_6_30,CDY\n```\nFor more options, try:\n\n    python train.py --help\n"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Testing pre-trained temporal models",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python test.py \n            --data_path data/wikidata12k                       \\\n            -n 128 -b 1024 -p 15000 -wu 5000                   \\\n            -a 1.0 -lr 0.0001 --max_steps 45000                \\\n            -save models/RotatE_WD12k_CDY --test_batch_size 16 \\\n            -scope d1100_1_1,d2019_6_30,CDY                    \\\n\t    --test_levels --test_time --test_scoping --test_ranking\n```\n\nFor more options, try:\n\n    python test.py --help\n"
+      },
+      "source": "https://gitlab.com/jleblay/tokei/-/blob/master/README.md",
+      "technique": "header_analysis"
+    }
+  ]
+}
