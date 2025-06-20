@@ -197,13 +197,3 @@ class TestProcessRepository(unittest.TestCase):
         assert len(licenses) == 1 and "LICENSE" in licenses[0]["source"] and \
             len(citation) == 1 and "example_onto" not in citation[0]["source"]
         
-    # 17062025 Core version
-    # without ontologies in core
-    # def test_issue_611(self):
-    #     """
-    #     Test designed to see if the ontologies in this repo are detected
-    #     """
-    #     github_data = Result()
-    #     text, github_data = process_files.process_repository_files(test_data_repositories + "termlex-main", github_data,
-    #                                                                constants.RepositoryType.LOCAL)
-    #     assert len(github_data.results[constants.CAT_ONTOLOGIES]) >= 1

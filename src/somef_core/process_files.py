@@ -5,8 +5,6 @@ import urllib
 import yaml
 from urllib.parse import urlparse
 from .utils import constants, markdown_utils
-# 17062025 Core
-# from . import extract_ontologies, extract_workflows
 from . import extract_workflows
 from .process_results import Result
 from .regular_expressions import detect_license_spdx, extract_scholarly_article_natural, extract_scholarly_article_properties
@@ -164,19 +162,6 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                    constants.PROP_TYPE: constants.URL
                                                }, 1, constants.TECHNIQUE_FILE_EXPLORATION
                                                )
-                # 17062025 Core   
-                # if filename.endswith(".ttl") or filename.endswith(".owl") or filename.endswith(".nt") or filename. \
-                #         endswith(".xml"):
-                #     uri = extract_ontologies.is_file_ontology(os.path.join(repo_dir, file_path))
-                #     if uri is not None:
-                #         onto_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir,
-                #                                  repo_relative_path, filename)
-                #         metadata_result.add_result(constants.CAT_ONTOLOGIES,
-                #                                    {
-                #                                        constants.PROP_VALUE: onto_url,
-                #                                        constants.PROP_TYPE: constants.URL
-                #                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION
-                #                                    )
                 if filename.upper() == constants.CODEOWNERS_FILE:
                     codeowners_json = parse_codeowners_structured(dir_path,filename)
 
@@ -217,16 +202,7 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                     {
                                                         constants.PROP_VALUE: workflow_url_gitlab,
                                                         constants.PROP_TYPE: constants.URL
-                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)
-                        # 17062025 Core
-                        # elif extract_workflows.is_file_workflow(os.path.join(repo_dir, file_path)):
-                        #     workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
-                        #                                     repo_dir, repo_relative_path, filename)
-                        #     metadata_result.add_result(constants.CAT_WORKFLOWS,
-                        #                             {
-                        #                                 constants.PROP_VALUE: workflow_url,
-                        #                                 constants.PROP_TYPE: constants.URL
-                        #                             }, 1, constants.TECHNIQUE_FILE_EXPLORATION)        
+                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)   
                     elif repo_type == constants.RepositoryType.GITHUB:
                         # if file_path.startswith(".github/workflows/"):
                         #     category = constants.CAT_WORKFLOWS
@@ -244,23 +220,7 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                         repo_dir, repo_relative_path, filename)
                             metadata_result.add_result(category,
                                                     {constants.PROP_VALUE: workflow_url, constants.PROP_TYPE: constants.URL},
-                                                    1, constants.TECHNIQUE_FILE_EXPLORATION)
-                # 17062025 Core           
-                # if filename.endswith(".ga") or filename.endswith(".cwl") or filename.endswith(".nf") or (
-                #         filename.endswith(".snake") or filename.endswith(
-                #     ".smk") or "Snakefile" == filename_no_ext) or filename.endswith(".knwf") or filename.endswith(
-                #     ".t2flow") or filename.endswith(".dag") or filename.endswith(".kar") or filename.endswith(
-                #     ".wdl"):
-                #     analysis = extract_workflows.is_file_workflow(os.path.join(repo_dir, file_path))
-                #     if analysis:
-                #         workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
-                #                                     repo_dir, repo_relative_path, filename)
-                #         metadata_result.add_result(constants.CAT_WORKFLOWS,
-                #                                 {
-                #                                     constants.PROP_VALUE: workflow_url,
-                #                                     constants.PROP_TYPE: constants.URL
-                #                                 }, 1, constants.TECHNIQUE_FILE_EXPLORATION)
-                        
+                                                    1, constants.TECHNIQUE_FILE_EXPLORATION) 
             if 'citation' in metadata_result.results:
                 for cit in metadata_result.results['citation']:
                     scholarly_article = {}

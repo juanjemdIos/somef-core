@@ -9,16 +9,10 @@ import urllib.parse
 
 from os import path
 from . import header_analysis, regular_expressions, process_repository, configuration, process_files
-# 17062025 Core
-    # supervised_classification
 from .process_results import Result
 from .utils import constants, markdown_utils
 from .parser import mardown_parser, create_excerpts
-# 17062025 Core
-# from .export.turtle_export import DataGraph
 from .export import json_export
-# 17062025 Core
-# from .extract_software_type import check_repository_type
 from urllib.parse import urlparse, quote
 
 def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, local_repo=None,
@@ -98,8 +92,6 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                                                                                                repo_name,
                                                                                                def_branch,
                                                                                               ignore_test_folder)
-                # 17062025 Core
-                # repository_metadata = check_repository_type(local_folder, repo_name, full_repository_metadata)
             else:  # Use a temp directory
                 with tempfile.TemporaryDirectory() as temp_dir:
                     local_folder = process_repository.download_repository_files(owner, repo_name, def_branch, repo_type,
@@ -110,8 +102,6 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                                                                                                    repo_name,
                                                                                                    def_branch,
                                                                                                     ignore_test_folder)
-                    # 17062025 Core                                                                               
-                    #  repository_metadata = check_repository_type(local_folder, repo_name, full_repository_metadata)
             if readme_text == "":
                 logging.warning("README document does not exist in the target repository")
         except process_repository.GithubUrlError:
@@ -140,18 +130,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
         readme_unfiltered_text = markdown_utils.remove_comments(readme_unfiltered_text)
         repository_metadata, string_list = header_analysis.extract_categories(readme_unfiltered_text,
                                                                               repository_metadata)
-        readme_text_unmarked = markdown_utils.unmark(readme_text)
-        # 17062025 Core version
-        # if not ignore_classifiers and readme_unfiltered_text != '':
-        #     repository_metadata = supervised_classification.run_category_classification(readme_unfiltered_text,
-        #                                                                                 threshold,
-        #                                                                                 repository_metadata)
-        #     excerpts = create_excerpts.create_excerpts(string_list)
-        #     excerpts_headers = mardown_parser.extract_text_excerpts_header(readme_unfiltered_text)
-        #     header_parents = mardown_parser.extract_headers_parents(readme_unfiltered_text)
-        #     score_dict = supervised_classification.run_classifiers(excerpts, file_paths)
-        #     repository_metadata = supervised_classification.classify(score_dict, threshold, excerpts_headers,
-        #                                                              header_parents, repository_metadata)
+        readme_text_unmarked = markdown_utils.unmark(readme_text)                                                       header_parents, repository_metadata)
         if readme_text_unmarked != "":
             try:
                 readme_source = repository_metadata.results[constants.CAT_README_URL][0]
@@ -278,16 +257,5 @@ def run_cli(*,
         if codemeta_out is not None:
             json_export.save_codemeta_output(repo_data.results, codemeta_out, pretty=pretty)
 
-    # 17062025 Core version
-    # if graph_out is not None:
-    #     logging.info("Generating triples...")
-    #     data_graph = DataGraph()
-    #     if multiple_repos:
-    #         for repo in repo_data:
-    #             data_graph.somef_data_to_graph(repo.results)
-    #     else:
-    #         data_graph.somef_data_to_graph(repo_data.results)
-
-    #     data_graph.export_to_file(graph_out, graph_format)
 
 
