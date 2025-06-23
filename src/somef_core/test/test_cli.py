@@ -161,29 +161,6 @@ class TestCli(unittest.TestCase):
         os.remove(test_data_path + "test-380.json")
 
 
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_issue_379(self):
-    #     """ Checks if a target readme works (it caused duplicate excerpts)"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url=None,
-    #                       doc_src=test_data_path + "README-raidologist.md",
-    #                       in_file=None,
-    #                       output=test_data_path + "test-379.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=True)
-    #     text_file = open(test_data_path + "test-379.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     description = json_content[constants.CAT_DESCRIPTION]
-    #     assert len(description) > 0
-    #     os.remove(test_data_path + "test-379.json")
-
     def test_issue_383(self):
         """Checks if the section `Contact` can be properly parsed"""
         somef_cli.run_cli(threshold=0.8,
@@ -319,29 +296,6 @@ class TestCli(unittest.TestCase):
         assert data.find(constants.FORMAT_CFF) > 0
         os.remove(test_data_path + "test-319-1.json")
 
-    # 17062025 Core
-    # no extract ontologies
-    # def test_issue_388(self):
-    #     """Test checks that ontologies are recognized appropriately"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url=None,
-    #                       doc_src=None,
-    #                       local_repo=test_data_repositories + "Widoco",
-    #                       in_file=None,
-    #                       output=test_data_path + "test-388.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=False)
-    #     text_file = open(test_data_path + "test-388.json", "r")
-    #     data = text_file.read()
-    #     json_content = json.loads(data)
-    #     text_file.close()
-    #     assert len(json_content[constants.CAT_ONTOLOGIES]) == 2
-    #     os.remove(test_data_path + "test-388.json")
-
     def test_issue_319_2(self):
         """Test checks that the output format of citation files is specified in the output"""
         somef_cli.run_cli(threshold=0.8,
@@ -470,71 +424,6 @@ class TestCli(unittest.TestCase):
         image = json_content[constants.CAT_IMAGE]
         assert image is not None
         os.remove(test_data_path + "test-314-1.json")
-
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_issue_314_2(self):
-    #     """Checks that the program can be run using only a single readme. Gitlab"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url="https://gitlab.com/jleblay/tokei",
-    #                       doc_src=None,
-    #                       in_file=None,
-    #                       output=test_data_path + "test-314-2.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=False,
-    #                       readme_only=True)
-    #     text_file = open(test_data_path + "test-314-2.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     description = json_content[constants.CAT_DESCRIPTION]
-    #     assert description is not None
-    #     os.remove(test_data_path + "test-314-2.json")
-
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_issue_314_3(self):
-    #     """Checks that the program can be run using only a single readme. Gitlab"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url="https://gitlab.com/unboundedsystems/adapt/-/tree/release-0.1",
-    #                       doc_src=None,
-    #                       in_file=None,
-    #                       output=test_data_path + "test-314-3.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=True,
-    #                       readme_only=True)
-    #     text_file = open(test_data_path + "test-314-3.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     description = json_content[constants.CAT_DESCRIPTION]
-    #     assert description is not None
-    #     os.remove(test_data_path + "test-314-3.json")
-
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_gitlab(self):
-    #     """Checks if SOMEF works against Gitlab. Full analysis"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       repo_url="https://gitlab.com/jleblay/tokei",
-    #                       output=test_data_path + "test-314-2.json",
-    #                       pretty=True,
-    #                       readme_only=False)
-    #     text_file = open(test_data_path + "test-314-2.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     description = json_content[constants.CAT_DESCRIPTION]
-    #     assert description is not None
-    #     os.remove(test_data_path + "test-314-2.json")
 
     def test_issue_403(self):
         """Checks that the readme link returned by somef is correct"""
@@ -772,30 +661,6 @@ class TestCli(unittest.TestCase):
         assert data.find(constants.FORMAT_DOCKERFILE) >= 0
         os.remove(test_data_path + "test-366.json")
 
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_issue_428(self):
-    #     """Checks if the text before the main header is passed on to the classifiers"""
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url=None,
-    #                       local_repo=None,
-    #                       doc_src=test_data_path + "README-manim.md",
-    #                       in_file=None,
-    #                       output=test_data_path + "test-428.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=True,
-    #                       readme_only=False)
-    #     text_file = open(test_data_path + "test-428.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     assert data.find(
-    #         "Manim is an engine for precise programmatic animations, designed for creating explanatory math videos.") > 0
-    #     os.remove(test_data_path + "test-428.json")
-
     def test_issue_443(self):
         somef_cli.run_cli(threshold=0.8,
                           ignore_classifiers=False,
@@ -839,30 +704,6 @@ class TestCli(unittest.TestCase):
         description = json_content[constants.CAT_DESCRIPTION]
         assert description is not None
         os.remove(test_data_path + "test-443.json")
-
-    # 17062025 Core
-    # It no longer applies because the description was obtained using supervised_classifications.
-    # def test_issue_457(self):
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url=None,
-    #                       local_repo=None,
-    #                       doc_src=test_data_path + "README-pytorch.md",
-    #                       in_file=None,
-    #                       output=test_data_path + "test-457.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=True,
-    #                       readme_only=False)
-    #     text_file = open(test_data_path + "test-457.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     description = json_content[constants.CAT_DESCRIPTION]
-    #     assert description is not None
-    #     os.remove(test_data_path + "test-457.json")
 
     def test_issue_556(self):
         """
@@ -937,56 +778,3 @@ class TestCli(unittest.TestCase):
         text_file.close()
         assert constants.CAT_ACKNOWLEDGEMENT not in json_content
         os.remove(test_data_path + "repositories/software_catalog/test-567.json")
-
-    # 17062025 Core
-    # def test_categorization(self):
-    #     """Checks that the categorization is done properly"""
-    #     somef_cli.run_cli(threshold=0.6,
-    #                       ignore_classifiers=False,
-    #                       repo_url="https://github.com/oeg-upm/devops-infra",
-    #                       doc_src=None,
-    #                       local_repo=None,
-    #                       in_file=None,
-    #                       output=test_data_path + "repositories/repos_oeg/test-category.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=False)
-    #     text_file = open(test_data_path + "repositories/repos_oeg/test-category.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     repo_status = json_content[constants.CAT_TYPE][0]
-    #     print(repo_status)
-    #     repo_type = repo_status[constants.PROP_RESULT][constants.PROP_VALUE]
-    #     print(repo_type)
-    #     assert repo_type == "ontology"
-    #     os.remove(test_data_path + "repositories/repos_oeg/test-category.json")
-
-    # 17062025 Core
-    # def test_redundant_files(self):
-    #     """
-    #     This test checks if the redundant files for the repository TEC-Toolkit/CFO work correctly.
-    #     An error was detected in this repo
-    #     """
-    #     somef_cli.run_cli(threshold=0.8,
-    #                       ignore_classifiers=False,
-    #                       repo_url="https://github.com/Tec-Toolkit/ECFO",
-    #                       local_repo=None,
-    #                       doc_src=None,
-    #                       in_file=None,
-    #                       output=test_data_path + "test-ecfo.json",
-    #                       graph_out=None,
-    #                       graph_format="turtle",
-    #                       codemeta_out=None,
-    #                       pretty=True,
-    #                       missing=True,
-    #                       readme_only=False)
-    #     text_file = open(test_data_path + "test-ecfo.json", "r")
-    #     data = text_file.read()
-    #     text_file.close()
-    #     json_content = json.loads(data)
-    #     t = json_content[constants.CAT_TYPE][0]
-    #     assert t[constants.PROP_RESULT][constants.PROP_VALUE] == "ontology"
-    #     os.remove(test_data_path + "test-ecfo.json")

@@ -3,16 +3,7 @@ from pathlib import Path
 import json
 import sys
 import logging
-
 from .utils import constants
-
-# 17062025 Core version
-# path = Path(__file__).parent.absolute()
-# default_description = os.path.join(str(path), "models", "description.p")
-# default_invocation = os.path.join(str(path), "models", "invocation.p")
-# default_installation = os.path.join(str(path), "models", "installation.p")
-# default_citation = os.path.join(str(path), "models", "citation.p")
-
 
 def get_configuration_file():
     """
@@ -47,15 +38,6 @@ def update_base_uri(base_uri):
             credentials_file.parent.chmod(0o700)
             credentials_file.chmod(0o600)
             json.dump(data, fh)
-
-# 17062025 Core version
-# def configure(authorization="",
-#               description=default_description,
-#               invocation=default_invocation,
-#               installation=default_installation,
-#               citation=default_citation,
-#               base_uri=constants.CONF_DEFAULT_BASE_URI):
-
 
 def configure(authorization="",
               description=None,
