@@ -1,6 +1,9 @@
 # Software Metadata Extraction Framework CORE (SOMEF-core)
 
-TO DO: Add badges.
+TO DO: Add other badges.
+
+[![Documentation Status](https://readthedocs.org/projects/somef-core/badge/?version=latest)](https://somef-core.readthedocs.io/en/latest/?badge=latest)
+
 
 <img src="docs/logo.png" alt="logo" width="150"/>
 
@@ -75,7 +78,7 @@ We use different supervised classifiers, header analysis, regular expressions, t
 
 ## Documentation
 
-We are working on  this
+The documentation for somef-core is available at [https://somef-core.readthedocs.io/en/latest/](https://somef-core.readthedocs.io/en/latest/)
 
 ## Cite SOMEF and SOMEF-core:
 
