@@ -27,4 +27,4 @@ def update_version(toml_path, version_file):
         f.write(new_content)
 
 
-update_version("pyproject.toml", "src/somef/__init__.py")
+update_version("pyproject.toml", "src/somef_core/__init__.py")

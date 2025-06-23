@@ -1,9 +1,9 @@
-SOMEF supports three main output formats. Each of them contains different information with different levels of granularity. Below we enumerate them from more granular to less granular:
+SOMEF-core supports three main output formats. Each of them contains different information with different levels of granularity. Below we enumerate them from more granular to less granular:
 
 ## JSON format
 **Version:** 1.0.1
 
-Default SOMEF response (and more complete in terms of metadata). The JSON format returns a set of categories, as shown in the snippet below:
+Default SOMEF-core response (and more complete in terms of metadata). The JSON format returns a set of categories, as shown in the snippet below:
 
 ```json
 {
@@ -66,7 +66,6 @@ The `confidence` depends on the `technique` used. In this case, the confidence i
 SOMEF aims to recognize the following categories (in alphabetical order):
 
 - `acknowledgement`: Any text that the authors have prepared to acknnowledge the contribution from others, or project funding.
-- `application_domain`: The application domain of the repository. This may be related to the research area of a software component (e.g., Astrophysics) or the general domain/functionality of the tool (i.e., machine learning projects). See all current recognized application domains [here](https://somef.readthedocs.io/en/latest/#myfootnote1).
 - `authors`: Person or organization responsible of the project. This property is also used to indicate the responsible entities of a publication associated with the code repository.
 - `citation`: Software citation (usually in `.bib` form) as the authors have stated in their readme file, or through a `CFF` file.
 - `code_of_conduct`: Link to the code of conduct file of the project
@@ -97,7 +96,6 @@ SOMEF aims to recognize the following categories (in alphabetical order):
 - `license`: License and usage terms of a software component
 - `logo`: Main logo used to represent the target software component.
 - `name`: Name identifying a software component
-- `ontologies`: URL and path to the ontology files present in the repository.
 - `owner`: Name of the user or organization in charge of the repository
 - `package_distribution`: Link to official package repositories where the software can be downloaded from (e.g., `pypi`).
 - `package_file`: Link to a package file used in the repository (e.g., `pyproject.toml`, `setup.py`).

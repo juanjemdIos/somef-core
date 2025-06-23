@@ -16,26 +16,26 @@ To run SOMEF, please follow the next steps:
 Clone this GitHub repository
 
 ```
-git clone https://github.com/KnowledgeCaptureAndDiscovery/somef.git
+git clone https://github.com/SciCodes/somef-core.git
 ```
 
-Install somef (you should be in the folder that you just cloned). Note that for Python 3.7 and 3.8 the module Cython should be installed in advanced (through the command: `pip install Cython`).
+Install somef-core (you should be in the folder that you just cloned). Note that for Python 3.7 and 3.8 the module Cython should be installed in advanced (through the command: `pip install Cython`).
 
 ```
-cd somef
+cd somef-core
 pip install -e .
 ```
 
 Run SOMEF
 
 ```bash
-somef --help
+somef_core --help
 ```
 
 If everything goes fine, you should see:
 
 ```bash
-Usage: somef [OPTIONS] COMMAND [ARGS]...
+Usage: somef_core [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -h, --help  Show this message and exit.
@@ -84,7 +84,7 @@ docker run -it --rm -v $PWD/:/out kcapd/somef /bin/bash
 If you move any files produced by somef into `/out`, then you will be able to see them in your current directory.
 
 ## Configure
-Before running SOMEF, you must configure it appropriately. Run:
+Before running SOMEF-core, you must configure it appropriately. Run:
 
 ```bash
 python -m nltk.downloader wordnet
@@ -93,7 +93,7 @@ python -m nltk.downloader omw-1.4
 To download two wordnet modules needed. Then run:
 
 ```bash
-somef configure
+somef_core configure
 ```
 
 And you will be asked to provide the following: 
@@ -104,18 +104,18 @@ And you will be asked to provide the following:
 If you want to configure SOMEF with the default parameters, just type:
 
 ```bash
-somef configure -a
+somef_core configure -a
 ```
 
 For showing help about the available options, run:
 
 ```bash
-somef configure --help
+somef_core configure --help
 ```
 Which displays:
 
 ```bash
-Usage: somef configure [OPTIONS]
+Usage: somef_core configure [OPTIONS]
 
   Configure GitHub credentials and classifiers file path
 

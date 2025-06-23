@@ -1,12 +1,12 @@
-To see the available options for SOMEF:
+To see the available options for SOMEF-core:
 
 ```bash
-somef --help
+somef_core --help
 ```
 and you will see the main help message:
 
 ```bash
-Usage: somef [OPTIONS] COMMAND [ARGS]...
+Usage: somef_core [OPTIONS] COMMAND [ARGS]...
 
 Options:
   -h, --help  Show this message and exit.
@@ -16,10 +16,10 @@ Commands:
   describe   Running the Command Line Interface
   version    Show somef version.
 ```
-The options to run somef are through the `describe` command:
+The options to run somef-core are through the `describe` command:
 
 ```bash
-  somef describe --help
+  somef_core describe --help
   SOMEF Command Line Interface
 Usage: somef describe [OPTIONS]
 
@@ -52,7 +52,7 @@ Options:
                                   file.
 
   -m, --missing                   JSON report with the missing metadata fields
-                                  SOMEF was not able to find. The report will
+                                  SOMEF-core was not able to find. The report will
                                   be placed in  $PATH_missing.json, where
                                   $PATH is -o, -c or -g.
   -kt, --keep_tmp PATH            SOMEF will NOT delete the temporary folder
@@ -67,22 +67,22 @@ Options:
 The following command extracts all metadata available from [https://github.com/dgarijo/Widoco/](https://github.com/dgarijo/Widoco/). 
 
 ```bash
-somef describe -r https://github.com/dgarijo/Widoco/ -o test.json -t 0.8
+somef_core describe -r https://github.com/dgarijo/Widoco/ -o test.json -t 0.8
 ```
 
 To obtain the same information as a JSON-LD file:
 
 ```bash
-somef describe -r https://github.com/dgarijo/Widoco/ -g test.jsonld -f json-ld -t 0.8
+somef_core describe -r https://github.com/dgarijo/Widoco/ -g test.jsonld -f json-ld -t 0.8
 ```
 
 If you prefer to export as a [Codemeta](https://codemeta.github.io/) JSON-LD, just type:
 
 ```bash
-somef describe -r https://github.com/dgarijo/Widoco/ -c test.json
+somef_core describe -r https://github.com/dgarijo/Widoco/ -c test.json
 ```
 
-For more information about the output types supported by SOMEF, please see [the output format help page](https://somef.readthedocs.io/en/latest/output/).
+For more information about the output types supported by SOMEF, please see [the output format help page](https://somef-core.readthedocs.io/en/latest/).
 
 We recommend having a high value for the `threshold` parameter, 0.8 (default) or above.
 

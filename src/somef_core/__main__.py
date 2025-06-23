@@ -33,11 +33,6 @@ def configure(auto, base_uri):
         configuration.update_base_uri(base_uri)
     else:
         authorization = click.prompt("Authorization", default="")
-        # 17062025 Core version
-        # description = click.prompt("Documentation classifier model file", default=configuration.default_description)
-        # invocation = click.prompt("Invocation classifier model file", default=configuration.default_invocation)
-        # installation = click.prompt("Installation classifier model file", default=configuration.default_installation)
-        # citation = click.prompt("Citation classifier model file", default=configuration.default_citation)
         description = None
         invocation = None
         installation = None
