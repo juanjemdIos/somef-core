@@ -130,7 +130,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
         readme_unfiltered_text = markdown_utils.remove_comments(readme_unfiltered_text)
         repository_metadata, string_list = header_analysis.extract_categories(readme_unfiltered_text,
                                                                               repository_metadata)
-        readme_text_unmarked = markdown_utils.unmark(readme_text)                                                       header_parents, repository_metadata)
+        readme_text_unmarked = markdown_utils.unmark(readme_text)
         if readme_text_unmarked != "":
             try:
                 readme_source = repository_metadata.results[constants.CAT_README_URL][0]
