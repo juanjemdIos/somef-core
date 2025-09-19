@@ -154,7 +154,7 @@ poetry --version
 Install somef and all their dependencies.
 
 ```
-cd /somef-core
+cd /somef_core
 poetry install
 ```
 
