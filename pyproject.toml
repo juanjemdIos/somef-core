@@ -1,48 +1,50 @@
-[tool.poetry]
+[project]
 name = "somef_core"
 version = "0.0.1"
 description = "SOftware Metadata Extraction Framework (CORE): A tool for automatically extracting relevant software metadata from readme files and package files."
-authors = ["Daniel Garijo <daniel.garijo@upm.es>"]
+authors = [
+    { name = "Daniel Garijo", email = "daniel.garijo@upm.es" }
+]
 packages = [
     { include = "somef_core", from = "src" }
 ]
+requires-python = ">=3.9,<=3.13"
 classifiers = [ 
     "Programming Language :: Python :: 3.10", 
     "Operating System :: OS Independent", 
     "License :: OSI Approved :: MIT License", 
     "Topic :: Software Development :: Libraries :: Python Modules"
     ]
+urls = { homepage = "https://github.com/SciCodes/somef-core" }
+
 readme = "README.md"
 
-[tool.poetry.dependencies]
-python = ">=3.9,<=3.13"
-bs4 = "^0.0.1"
-click = "^8.1.7"
-click-option-group = "^0.5.6"
-matplotlib = "^3.8.2"
-nltk = "^3.9.0"
-numpy = "^1.26.3"
-pandas = "^2.1.4"
-textblob = "^0.17.1"
-validators = "^0.22.0"
-scipy = "^1.11.4"
-inflect = "^7.0.0"
-contractions = "^0.1.73"
-chardet = "^5.2.0"
-pytest = "^7.4.4"
-bibtexparser = "^1.4.1"
-nbformat = "^5.9.2"
-markdown = "^3.5.2"
-requests = "^2.31.0"
-pyyaml = "^6.0.2"
-lxml = "^5.1.0"
-tomli = "^2.0.1"
+dependencies = [
+    "bs4 >=0.0.1",
+    "click >=8.1.7",
+    "click-option-group >=0.5.6",
+    "matplotlib >=3.8.2",
+    "nltk >=3.9.0",
+    "numpy >=1.26.3",
+    "pandas >=2.1.4",
+    "textblob >=0.17.1",
+    "validators >=0.22.0",
+    "scipy >=1.11.4",
+    "inflect >=7.0.0",
+    "contractions >=0.1.73",
+    "chardet >=5.2.0",
+    "pytest >=7.4.4",
+    "bibtexparser >=1.4.1",
+    "nbformat >=5.9.2",
+    "markdown >=3.5.2",
+    "requests >=2.31.0",
+    "pyyaml >=6.0.2",
+    "lxml >=5.1.0",
+    "tomli >=2.0.1"
+]
 
-[tool.poetry.scripts]
+[project.scripts]
 somef_core = "somef_core.__main__:cli"
-
-[tool.poetry.urls]
-homepage = "https://github.com/SciCodes/somef-core"
 
 [build-system]
 requires = ["poetry-core>=1.1.10"]
