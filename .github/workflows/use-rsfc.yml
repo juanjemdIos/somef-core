@@ -1,0 +1,12 @@
+name: Call RSFC reusable workflow
+
+on:
+  workflow_dispatch: 
+
+jobs:
+  call-rsfc:
+    uses: juanjemdIos/oeg_rsfc/.github/workflows/run-rsfc.yml@main
+    with:
+    repo_url: https://github.com/${{ github.repository }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.RSFC_TOKEN }}   
