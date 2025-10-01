@@ -2,7 +2,7 @@ name: Call RSFC reusable workflow
 
 on:
   workflow_dispatch: 
-push:
+  push:
     branches:
       - main
 
