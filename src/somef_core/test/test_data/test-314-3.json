@@ -1,0 +1,133 @@
+{
+  "full_title": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "Adapt - ReactJS for your infrastructure."
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "images": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://adaptjs.org/docs/assets/getting_started/adapt-demo-scaled.gif"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "logo": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://adaptjs.org/img/logo_lockup.svg"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "somef_missing_categories": [
+    "application_domain",
+    "acknowledgement",
+    "authors",
+    "citation",
+    "contributors",
+    "contributing_guidelines",
+    "continuous_integration",
+    "code_of_conduct",
+    "code_repository",
+    "contact",
+    "description",
+    "date_created",
+    "date_updated",
+    "documentation",
+    "download",
+    "download_url",
+    "executable_example",
+    "faq",
+    "forks_count",
+    "forks_url",
+    "full_name",
+    "has_build_file",
+    "has_script_file",
+    "identifier",
+    "installation",
+    "invocation",
+    "issue_tracker",
+    "homepage",
+    "keywords",
+    "license",
+    "name",
+    "ontologies",
+    "owner",
+    "package_distribution",
+    "has_package_file",
+    "programming_languages",
+    "readme_url",
+    "related_documentation",
+    "releases",
+    "run",
+    "runtime_platform",
+    "related_papers",
+    "repository_status",
+    "requirements",
+    "stargazers_count",
+    "support_channels",
+    "workflows",
+    "type"
+  ],
+  "somef_provenance": {
+    "date": "2026-01-20 09:20:57",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.13"
+  },
+  "support": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Getting Help",
+        "parent_header": [
+          "Adapt - ReactJS for your infrastructure."
+        ],
+        "type": "Text_excerpt",
+        "value": "[![Gitter](https://badges.gitter.im/UnboundedSystems/Adapt.svg)](https://gitter.im/UnboundedSystems/Adapt)\n\nWe'd love to hear about your experience with Adapt!\nJoin us on our [Gitter channel](https://gitter.im/UnboundedSystems/Adapt) to ask questions or to give us your feedback and suggestions.\n\nIf you've found a bug, you can also [file an issue](https://gitlab.com/unboundedsystems/adapt/issues).\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "usage": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Getting Started",
+        "parent_header": [
+          "Adapt - ReactJS for your infrastructure."
+        ],
+        "type": "Text_excerpt",
+        "value": "For a new project, it's easy to get started with Adapt by using a starter template.\nThe [Getting Started Guide](https://adaptjs.org/docs/getting_started) will walk through installing Adapt and deploying your first starter app.\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Getting Help",
+        "parent_header": [
+          "Adapt - ReactJS for your infrastructure."
+        ],
+        "type": "Text_excerpt",
+        "value": "[![Gitter](https://badges.gitter.im/UnboundedSystems/Adapt.svg)](https://gitter.im/UnboundedSystems/Adapt)\n\nWe'd love to hear about your experience with Adapt!\nJoin us on our [Gitter channel](https://gitter.im/UnboundedSystems/Adapt) to ask questions or to give us your feedback and suggestions.\n\nIf you've found a bug, you can also [file an issue](https://gitlab.com/unboundedsystems/adapt/issues).\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ]
+}

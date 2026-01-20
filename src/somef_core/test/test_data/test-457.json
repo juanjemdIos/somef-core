@@ -1,0 +1,302 @@
+{
+  "contributing_guidelines": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Releases and Contributing",
+        "type": "Text_excerpt",
+        "value": "PyTorch has a 90-day release cycle (major releases). Please let us know if you encounter a bug by [filing an issue](https://github.com/pytorch/pytorch/issues).\n\nWe appreciate all contributions. If you are planning to contribute back bug-fixes, please do so without any further discussion.\n\nIf you plan to contribute new features, utility functions, or extensions to the core, please first open an issue and discuss the feature with us.\nSending a PR without discussion might end up resulting in a rejected PR because we might be taking the core in a different direction than you might be aware of.\n\nTo learn more about making a contribution to Pytorch, please see our [Contribution page](CONTRIBUTING.md).\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "documentation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Building the Documentation",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "To build documentation in various formats, you will need [Sphinx](http://www.sphinx-doc.org) and the\nreadthedocs theme.\n\n```bash\ncd docs/\npip install -r requirements.txt\n```\nYou can then build the documentation by running `make <format>` from the\n`docs/` folder. Run `make` to get a list of all available output formats.\n\nIf you get a katex error run `npm install katex`.  If it persists, try\n`npm install -g katex`\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "images": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "./docs/source/_static/img/tensor_illustration.png"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://raw.githubusercontent.com/pytorch/pytorch/master/docs/source/_static/img/dynamic_graph.gif"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "installation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Binaries",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "Commands to install binaries via Conda or pip wheels are on our website: [https://pytorch.org/get-started/locally/](https://pytorch.org/get-started/locally/)\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "NVIDIA Jetson Platforms",
+        "parent_header": [
+          "Installation",
+          "Binaries"
+        ],
+        "type": "Text_excerpt",
+        "value": "Python wheels for NVIDIA's Jetson Nano, Jetson TX2, and Jetson AGX Xavier are provided [here](https://forums.developer.nvidia.com/t/pytorch-for-jetson-version-1-10-now-available/72048) and the L4T container is published [here](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/l4t-pytorch)\n\nThey require JetPack 4.2 and above, and [@dusty-nv](https://github.com/dusty-nv) and [@ptrblck](https://github.com/ptrblck) are maintaining them.\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "From Source",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "If you are installing from source, you will need Python 3.7 or later and a C++14 compiler. Also, we highly recommend installing an [Anaconda](https://www.anaconda.com/distribution/#download-section) environment.\nYou will get a high-quality BLAS library (MKL) and you get controlled dependency versions regardless of your Linux distro.\n\nOnce you have [Anaconda](https://www.anaconda.com/distribution/#download-section) installed, here are the instructions.\n\nIf you want to compile with CUDA support, install\n- [NVIDIA CUDA](https://developer.nvidia.com/cuda-downloads) 10.2 or above\n- [NVIDIA cuDNN](https://developer.nvidia.com/cudnn) v7 or above\n- [Compiler](https://gist.github.com/ax3l/9489132) compatible with CUDA\nNote: You could refer to the [cuDNN Support Matrix](https://docs.nvidia.com/deeplearning/cudnn/pdf/cuDNN-Support-Matrix.pdf) for cuDNN versions with the various supported CUDA, CUDA driver and NVIDIA hardwares\n\nIf you want to disable CUDA support, export the environment variable `USE_CUDA=0`.\nOther potentially useful environment variables may be found in `setup.py`.\n\nIf you are building for NVIDIA's Jetson platforms (Jetson Nano, TX1, TX2, AGX Xavier), Instructions to install PyTorch for Jetson Nano are [available here](https://devtalk.nvidia.com/default/topic/1049071/jetson-nano/pytorch-for-jetson-nano/)\n\nIf you want to compile with ROCm support, install\n- [AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html) 4.0 and above installation\n- ROCm is currently supported only for Linux systems.\n\nIf you want to disable ROCm support, export the environment variable `USE_ROCM=0`.\nOther potentially useful environment variables may be found in `setup.py`.\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Install Dependencies",
+        "parent_header": [
+          "Installation",
+          "From Source"
+        ],
+        "type": "Text_excerpt",
+        "value": "Common\n```bash\nconda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses\n```\n\nOn Linux\n```bash\n# CUDA only: Add LAPACK support for the GPU if needed\nconda install -c pytorch magma-cuda110  # or the magma-cuda* that matches your CUDA version from https://anaconda.org/pytorch/repo\n```\n\nOn MacOS\n```bash\n# Add these packages if torch.distributed is needed\nconda install pkg-config libuv\n```\n\nOn Windows\n```bash\n# Add these packages if torch.distributed is needed.\n# Distributed package support on Windows is a prototype feature and is subject to changes.\nconda install -c conda-forge libuv=1.39\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Install PyTorch",
+        "parent_header": [
+          "Installation",
+          "From Source"
+        ],
+        "type": "Text_excerpt",
+        "value": "On Linux\n```bash\nexport CMAKE_PREFIX_PATH=${CONDA_PREFIX:-\"$(dirname $(which conda))/../\"}\npython setup.py install\n```\n\nNote that if you are compiling for ROCm, you must run this command first:\n```bash\npython tools/amd_build/build_amd.py\n```\n\nNote that if you are using [Anaconda](https://www.anaconda.com/distribution/#download-section), you may experience an error caused by the linker:\n\n```plaintext\nbuild/temp.linux-x86_64-3.7/torch/csrc/stub.o: file not recognized: file format not recognized\ncollect2: error: ld returned 1 exit status\nerror: command 'g++' failed with exit status 1\n```\n\nThis is caused by `ld` from Conda environment shadowing the system `ld`. You should use a newer version of Python that fixes this issue. The recommended Python version is 3.7.6+ and 3.8.1+.\n\nOn macOS\n```bash\nexport CMAKE_PREFIX_PATH=${CONDA_PREFIX:-\"$(dirname $(which conda))/../\"}\nMACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py install\n```\n\nCUDA is not supported on macOS.\n\n\nOn Windows\n\nChoose Correct Visual Studio Version.\n\nSometimes there are regressions in new versions of Visual Studio, so\nit's best to use the same Visual Studio Version [16.8.5](https://github.com/pytorch/pytorch/blob/master/.circleci/scripts/vs_install.ps1) as Pytorch CI's.\n\nPyTorch CI uses Visual C++ BuildTools, which come with Visual Studio Enterprise,\nProfessional, or Community Editions. You can also install the build tools from\nhttps://visualstudio.microsoft.com/visual-cpp-build-tools/. The build tools *do not*\ncome with Visual Studio Code by default.\n\nIf you want to build legacy python code, please refer to [Building on legacy code and CUDA](https://github.com/pytorch/pytorch/blob/master/CONTRIBUTING.md#building-on-legacy-code-and-cuda)\n\nBuild with CPU\n\nIt's fairly easy to build with CPU.\n```cmd\nconda activate\npython setup.py install\n```\n\nNote on OpenMP: The desired OpenMP implementation is Intel OpenMP (iomp). In order to link against iomp, you'll need to manually download the library and set up the building environment by tweaking `CMAKE_INCLUDE_PATH` and `LIB`. The instruction [here](https://github.com/pytorch/pytorch/blob/master/docs/source/notes/windows.rst#building-from-source) is an example for setting up both MKL and Intel OpenMP. Without these configurations for CMake, Microsoft Visual C OpenMP runtime (vcomp) will be used.\n\nBuild with CUDA\n\n[NVTX](https://docs.nvidia.com/gameworks/content/gameworkslibrary/nvtx/nvidia_tools_extension_library_nvtx.htm) is needed to build Pytorch with CUDA.\nNVTX is a part of CUDA distributive, where it is called \"Nsight Compute\". To install it onto already installed CUDA run CUDA installation once again and check the corresponding checkbox.\nMake sure that CUDA with Nsight Compute is installed after Visual Studio.\n\nCurrently, VS 2017 / 2019, and Ninja are supported as the generator of CMake. If `ninja.exe` is detected in `PATH`, then Ninja will be used as the default generator, otherwise, it will use VS 2017 / 2019.\n<br/> If Ninja is selected as the generator, the latest MSVC will get selected as the underlying toolchain.\n\nAdditional libraries such as\n[Magma](https://developer.nvidia.com/magma), [oneDNN, a.k.a MKLDNN or DNNL](https://github.com/oneapi-src/oneDNN), and [Sccache](https://github.com/mozilla/sccache) are often needed. Please refer to the [installation-helper](https://github.com/pytorch/pytorch/tree/master/.jenkins/pytorch/win-test-helpers/installation-helpers) to install them.\n\nYou can refer to the [build_pytorch.bat](https://github.com/pytorch/pytorch/blob/master/.jenkins/pytorch/win-test-helpers/build_pytorch.bat) script for some other environment variables configurations\n\n\n```cmd\ncmd\n\n:: Set the environment variables after you have downloaded and upzipped the mkl package,\n:: else CMake would throw an error as `Could NOT find OpenMP`.\nset CMAKE_INCLUDE_PATH={Your directory}\\mkl\\include\nset LIB={Your directory}\\mkl\\lib;%LIB%\n\n:: Read the content in the previous section carefully before you proceed.\n:: [Optional] If you want to override the underlying toolset used by Ninja and Visual Studio with CUDA, please run the following script block.\n:: \"Visual Studio 2019 Developer Command Prompt\" will be run automatically.\n:: Make sure you have CMake >= 3.12 before you do this when you use the Visual Studio generator.\nset CMAKE_GENERATOR_TOOLSET_VERSION=14.27\nset DISTUTILS_USE_SDK=1\nfor /f \"usebackq tokens=*\" %i in (`\"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\vswhere.exe\" -version [15^,17^) -products * -latest -property installationPath`) do call \"%i\\VC\\Auxiliary\\Build\\vcvarsall.bat\" x64 -vcvars_ver=%CMAKE_GENERATOR_TOOLSET_VERSION%\n\n:: [Optional] If you want to override the CUDA host compiler\nset CUDAHOSTCXX=C:\\Program Files (x86)\\Microsoft Visual Studio\\2019\\Community\\VC\\Tools\\MSVC\\14.27.29110\\bin\\HostX64\\x64\\cl.exe\n\npython setup.py install\n\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Adjust Build Options (Optional)",
+        "parent_header": [
+          "Installation",
+          "From Source",
+          "Install PyTorch"
+        ],
+        "type": "Text_excerpt",
+        "value": "You can adjust the configuration of cmake variables optionally (without building first), by doing\nthe following. For example, adjusting the pre-detected directories for CuDNN or BLAS can be done\nwith such a step.\n\nOn Linux\n```bash\nexport CMAKE_PREFIX_PATH=${CONDA_PREFIX:-\"$(dirname $(which conda))/../\"}\npython setup.py build --cmake-only\nccmake build  # or cmake-gui build\n```\n\nOn macOS\n```bash\nexport CMAKE_PREFIX_PATH=${CONDA_PREFIX:-\"$(dirname $(which conda))/../\"}\nMACOSX_DEPLOYMENT_TARGET=10.9 CC=clang CXX=clang++ python setup.py build --cmake-only\nccmake build  # or cmake-gui build\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Using pre-built images",
+        "parent_header": [
+          "Installation",
+          "Docker Image"
+        ],
+        "type": "Text_excerpt",
+        "value": "You can also pull a pre-built docker image from Docker Hub and run with docker v19.03+\n\n```bash\ndocker run --gpus all --rm -ti --ipc=host pytorch/pytorch:latest\n```\n\nPlease note that PyTorch uses shared memory to share data between processes, so if torch multiprocessing is used (e.g.\nfor multithreaded data loaders) the default shared memory segment size that container runs with is not enough, and you\nshould increase shared memory size either with `--ipc=host` or `--shm-size` command line options to `nvidia-docker run`.\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Building the image yourself",
+        "parent_header": [
+          "Installation",
+          "Docker Image"
+        ],
+        "type": "Text_excerpt",
+        "value": "**NOTE:** Must be built with a docker version > 18.06\n\nThe `Dockerfile` is supplied to build images with CUDA 11.1 support and cuDNN v8.\nYou can pass `PYTHON_VERSION=x.y` make variable to specify which Python version is to be used by Miniconda, or leave it\nunset to use the default.\n```bash\nmake -f docker.Makefile\n# images are tagged as docker.io/${your_docker_username}/pytorch\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Previous Versions",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "Installation instructions and binaries for previous PyTorch versions may be found\non [our website](https://pytorch.org/previous-versions).\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "license": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "License",
+        "type": "Text_excerpt",
+        "value": "PyTorch has a BSD-style license, as found in the [LICENSE](LICENSE) file.\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "logo": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://raw.githubusercontent.com/pytorch/pytorch/master/docs/source/_static/img/pytorch-logo-dark.png"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "package_distribution": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://anaconda.org/pytorch/repo"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "requirements": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Install Dependencies",
+        "parent_header": [
+          "Installation",
+          "From Source"
+        ],
+        "type": "Text_excerpt",
+        "value": "Common\n```bash\nconda install astunparse numpy ninja pyyaml mkl mkl-include setuptools cmake cffi typing_extensions future six requests dataclasses\n```\n\nOn Linux\n```bash\n# CUDA only: Add LAPACK support for the GPU if needed\nconda install -c pytorch magma-cuda110  # or the magma-cuda* that matches your CUDA version from https://anaconda.org/pytorch/repo\n```\n\nOn MacOS\n```bash\n# Add these packages if torch.distributed is needed\nconda install pkg-config libuv\n```\n\nOn Windows\n```bash\n# Add these packages if torch.distributed is needed.\n# Distributed package support on Windows is a prototype feature and is subject to changes.\nconda install -c conda-forge libuv=1.39\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "somef_missing_categories": [
+    "application_domain",
+    "acknowledgement",
+    "authors",
+    "citation",
+    "contributors",
+    "continuous_integration",
+    "code_of_conduct",
+    "code_repository",
+    "contact",
+    "description",
+    "date_created",
+    "date_updated",
+    "download",
+    "download_url",
+    "executable_example",
+    "faq",
+    "forks_count",
+    "forks_url",
+    "full_name",
+    "full_title",
+    "has_build_file",
+    "has_script_file",
+    "identifier",
+    "invocation",
+    "issue_tracker",
+    "homepage",
+    "keywords",
+    "name",
+    "ontologies",
+    "owner",
+    "has_package_file",
+    "programming_languages",
+    "readme_url",
+    "related_documentation",
+    "releases",
+    "run",
+    "runtime_platform",
+    "related_papers",
+    "repository_status",
+    "stargazers_count",
+    "support",
+    "support_channels",
+    "workflows",
+    "type"
+  ],
+  "somef_provenance": {
+    "date": "2026-01-20 09:38:35",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.13"
+  },
+  "usage": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Get the PyTorch Source",
+        "parent_header": [
+          "Installation",
+          "From Source"
+        ],
+        "type": "Text_excerpt",
+        "value": "```bash\ngit clone --recursive https://github.com/pytorch/pytorch\ncd pytorch\n# if you are updating an existing checkout\ngit submodule sync\ngit submodule update --init --recursive --jobs 0\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Getting Started",
+        "type": "Text_excerpt",
+        "value": "Three-pointers to get you started:\n- [Tutorials: get you started with understanding and using PyTorch](https://pytorch.org/tutorials/)\n- [Examples: easy to understand PyTorch code across all domains](https://github.com/pytorch/examples)\n- [The API Reference](https://pytorch.org/docs/)\n- [Glossary](https://github.com/pytorch/pytorch/blob/master/GLOSSARY.md)\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ]
+}
