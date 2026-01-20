@@ -1,0 +1,15 @@
+name: Call RSFC reusable workflow
+
+on:
+  workflow_dispatch: 
+  push:
+    branches:
+      - main
+
+jobs:
+  call-rsfc:
+    uses: oeg-upm/rsfc/.github/workflows/run-rsfc.yml@main
+    with:
+      repo_url: https://github.com/${{ github.repository }}
+    secrets:
+      RSFC_TOKEN: ${{ secrets.RSFC_TOKEN }}   
