@@ -8,7 +8,7 @@ on:
 
 jobs:
   call-rsfc:
-    uses: oeg-upm/rsfc/.github/workflows/run-rsfc.yml@main
+    uses: juanjemdIos/oeg_rsfc/.github/workflows/run-rsfc.yml@main
     with:
       repo_url: https://github.com/${{ github.repository }}
     secrets:
