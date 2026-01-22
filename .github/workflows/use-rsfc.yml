@@ -2,9 +2,8 @@ name: Call RSFC reusable workflow
 
 on:
   workflow_dispatch: 
-  push:
-    branches:
-      - main
+  pull_request: 
+    types: [opened, synchronize, reopened]
 
 jobs:
   call-rsfc:
