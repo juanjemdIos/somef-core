@@ -5,7 +5,7 @@
 
 <img src="docs/logo.png" alt="logo" width="150"/>
 
-borrar después
+borrar después 6
 A command line interface for automatically extracting relevant metadata from code repositories (readme, configuration files, documentation, etc.).
 
 This repository is extracted from https://github.com/SciCodes/somef-core/
