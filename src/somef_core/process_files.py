@@ -3,17 +3,29 @@ import os
 import re
 import urllib
 import yaml
+import string
 from urllib.parse import urlparse
-from .utils import constants, markdown_utils
+from .utils import constants
+# from . import extract_workflows, extract_ontologies
 from . import extract_workflows
 from .process_results import Result
 from .regular_expressions import detect_license_spdx, extract_scholarly_article_natural, extract_scholarly_article_properties
 from .parser.pom_xml_parser import parse_pom_file
 from .parser.package_json_parser import parse_package_json_file
-from .parser.python_parser import parse_pyproject_toml
 from .parser.python_parser import parse_setup_py
-from.parser.python_parser import parse_requirements_txt
+from .parser.codemeta_parser import parse_codemeta_json_file
+from .parser.composer_parser import parse_composer_json
+from .parser.python_parser import parse_requirements_txt
+from .parser.authors_parser import parse_author_file
+from .parser.bower_parser import parse_bower_json_file
+from .parser.gemspec_parser import parse_gemspec_file
+from .parser.description_parser import parse_description_file
+from .parser.toml_parser import parse_toml_file
+from .parser.cabal_parser import parse_cabal_file
+from .parser.dockerfile_parser import parse_dockerfile
+from .parser.publiccode_parser import parse_publiccode_file
 from chardet import detect
+
 
 domain_gitlab = ''
 
@@ -41,12 +53,20 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
         domain_gitlab = extract_gitlab_domain(metadata_result, repo_type)
 
     text = ""
+    readmeMD_proccesed = False
+
     try:
+        parsed_build_files = set()
+
         for dir_path, dir_names, filenames in os.walk(repo_dir):
+
+            dir_names[:] = [d for d in dir_names if d.lower() not in constants.IGNORED_DIRS]
             repo_relative_path = os.path.relpath(dir_path, repo_dir)
+            current_dir = os.path.basename(repo_relative_path).lower()
             # if this is a test folder, we ignore it (except for the root repo)
-            if ignore_test_folder and repo_relative_path != "." and "test" in repo_relative_path.lower():
-                # skip this file if it's in a test folder, or inside one
+            # if ignore_test_folder and repo_relative_path != "." and "test" in repo_relative_path.lower():
+            if ignore_test_folder and repo_relative_path != "." and current_dir in constants.IGNORED_DIRS:
+                # skip this file if it's in a test folder, ignored dire, or inside one
                 continue
             for filename in filenames:
                 file_path = os.path.join(repo_relative_path, filename)
@@ -58,18 +78,31 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                 if filename == "Dockerfile" or filename.lower() == "docker-compose.yml":
                     docker_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir,
                                                repo_relative_path, filename)
+                    
+                    # full_path = os.path.join(repo_dir, file_path)
+
+                    result_value = {
+                        constants.PROP_VALUE: docker_url,
+                        constants.PROP_TYPE: constants.URL,
+                    }
+
                     if filename == "Dockerfile":
                         format_file = constants.FORMAT_DOCKERFILE
+                        result_value[constants.PROP_FORMAT] = format_file
+                        metadata_result = parse_dockerfile(os.path.join(dir_path, filename), metadata_result, docker_url)
                     else:
                         format_file = constants.FORMAT_DOCKER_COMPOSE
-                    metadata_result.add_result(constants.CAT_HAS_BUILD_FILE,
-                                               {
-                                                   constants.PROP_VALUE: docker_url,
-                                                   constants.PROP_TYPE: constants.URL,
-                                                   constants.PROP_FORMAT: format_file
-                                               },
-                                               1,
-                                               constants.TECHNIQUE_FILE_EXPLORATION, docker_url)
+
+                    result_value[constants.PROP_FORMAT] = format_file
+
+                    metadata_result.add_result(
+                        constants.CAT_HAS_BUILD_FILE,
+                        result_value,
+                        1,
+                        constants.TECHNIQUE_FILE_EXPLORATION,
+                        docker_url
+                    )
+ 
                 if filename.lower().endswith(".ipynb"):
                     notebook_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir,
                                                  repo_relative_path, filename)
@@ -84,29 +117,51 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                 filename_no_ext = os.path.splitext(filename)[0]
                 # this will take into account README, README.MD, README.TXT, README.RST
                 if "README" == filename_no_ext.upper():
-                    if repo_relative_path == ".":
-                        try:
-                            with open(os.path.join(dir_path, filename), "rb") as data_file:
-                                data_file_text = data_file.read()
-                                try:
-                                    text = data_file_text.decode("utf-8")
-                                except UnicodeError as err:
-                                    logging.error(f"{type(err).__name__} was raised: {err} Trying other encodings...")
-                                    text = data_file_text.decode(detect(data_file_text)["encoding"])
-                                if repo_type == constants.RepositoryType.GITHUB:
-                                    readme_url = convert_to_raw_user_content_github(filename, owner,
-                                                                                    repo_name,
-                                                                                    repo_default_branch)
-                                    metadata_result.add_result(constants.CAT_README_URL,
-                                                               {
-                                                                   constants.PROP_VALUE: readme_url,
-                                                                   constants.PROP_TYPE: constants.URL
-                                                               },
-                                                               1,
-                                                               constants.TECHNIQUE_FILE_EXPLORATION)
-                        except ValueError:
-                            logging.error("README Error: error while reading file content")
-                            logging.error(f"{type(err).__name__} was raised: {err}")
+                    # There is unexpected behavior when the README is available in multiple formats. 
+                    # We prioritize the .md format as it is more readable than pdf and others
+                    if not readmeMD_proccesed:
+                        if repo_relative_path == ".":
+                            try:
+
+                                with open(os.path.join(dir_path, filename), "rb") as data_file:
+                                    data_file_text = data_file.read()
+
+                                    try:                                       
+                                        text = data_file_text.decode("utf-8")
+                                    except UnicodeError as err:
+                                        logging.error(f"{type(err).__name__} was raised: {err} Trying other encodings...")
+                                        # text = data_file_text.decode(detect(data_file_text)["encoding"])
+                                        result_detect = detect(data_file_text)
+                                        encoding = result_detect.get("encoding")
+                                        if encoding:
+                                            try:
+                                                text = data_file_text.decode(encoding)
+                                            except UnicodeError as err:
+                                                logging.warning(f"Detected encoding '{encoding}' failed: {err}. Using utf-8 with replacement.")
+                                                text = data_file_text.decode("utf-8", errors="replace")
+                                        else:
+                                            logging.warning("Could not detect encoding. Using utf-8 with replacement.")
+                                            text = data_file_text.decode("utf-8", errors="replace")
+                                    text = clean_text(text)
+                               
+                                    if repo_type == constants.RepositoryType.GITHUB:
+                                        readme_url = convert_to_raw_user_content_github(filename, owner,
+                                                                                        repo_name,
+                                                                                        repo_default_branch)
+                                        metadata_result.add_result(constants.CAT_README_URL,
+                                                                {
+                                                                    constants.PROP_VALUE: readme_url,
+                                                                    constants.PROP_TYPE: constants.URL
+                                                                },
+                                                                1,
+                                                                constants.TECHNIQUE_FILE_EXPLORATION)
+                                    
+                                    if filename.upper() == "README.MD":
+                                        readmeMD_proccesed = True
+
+                            except ValueError:
+                                logging.error("README Error: error while reading file content")
+                                logging.error(f"{type(err).__name__} was raised: {err}")
                 if ("LICENCE" == filename.upper() or "LICENSE" == filename.upper() or "LICENSE.MD"== filename.upper()
                         or "LICENSE.RST"== filename.upper()):
                     metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
@@ -133,7 +188,13 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                     metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
                                                                repo_default_branch,
                                                                repo_dir, repo_relative_path, filename, dir_path,
-                                                               metadata_result, constants.CAT_CONTRIBUTORS)
+                                                               metadata_result, constants.CAT_CONTRIBUTORS) 
+                if "AUTHORS" == filename.upper() or "AUTHORS.MD" == filename.upper() or "AUTHORS.TXT" == filename.upper():
+                    metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
+                                                               repo_default_branch,
+                                                               repo_dir, repo_relative_path, filename, dir_path,
+                                                               metadata_result, constants.CAT_AUTHORS) 
+                    
                 if "INSTALL" in filename.upper() and filename.upper().endswith("MD"):
                     metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
                                                                repo_default_branch,
@@ -162,15 +223,33 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                    constants.PROP_TYPE: constants.URL
                                                }, 1, constants.TECHNIQUE_FILE_EXPLORATION
                                                )
+
                 if filename.upper() == constants.CODEOWNERS_FILE:
                     codeowners_json = parse_codeowners_structured(dir_path,filename)
 
+                if filename.lower() == "codemeta.json":
+                    if filename.lower() in parsed_build_files and repo_relative_path != ".":
+                        logging.info(f"Ignoring secondary {filename} in {dir_path}")
+                        continue
+
+                    codemeta_file_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir, repo_relative_path, filename)
+                    metadata_result = parse_codemeta_json_file(os.path.join(dir_path, filename), metadata_result, codemeta_file_url)
+                    parsed_build_files.add(filename.lower())
                     # TO DO: Code owners not fully implemented yet
+
                 if filename.lower() == "pom.xml" or filename.lower() == "package.json" or \
-                    filename.lower() == "pyproject.toml" or filename.lower() == "setup.py" or filename.lower() == "requirements.txt":
+                        filename.lower() == "pyproject.toml" or filename.lower() == "setup.py" or filename.endswith(".gemspec") or \
+                        filename.lower() == "requirements.txt" or filename.lower() == "bower.json" or filename == "DESCRIPTION" or \
+                        (filename.lower() == "cargo.toml" and repo_relative_path == ".") or (filename.lower() == "composer.json" and repo_relative_path == ".") or \
+                        (filename == "Project.toml" or (filename.lower()== "publiccode.yml" or filename.lower()== "publiccode.yaml") and repo_relative_path == "."):
+                        if filename.lower() in parsed_build_files and repo_relative_path != ".":
+                            logging.info(f"Ignoring secondary {filename} in {dir_path}")
+                            continue
+
                         build_file_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
                                                        repo_dir,
                                                        repo_relative_path, filename)
+                        
                         metadata_result.add_result(constants.CAT_HAS_BUILD_FILE,
                                                {
                                                    constants.PROP_VALUE: build_file_url,
@@ -179,18 +258,31 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                },
                                                1,
                                                constants.TECHNIQUE_FILE_EXPLORATION, build_file_url)
-                        logging.info(f"############### Processing package file: {filename} ############### ")
+                        logging.info(f"############### (NEW UPDATE) Processing package file: {filename} ############### ")
                         if filename.lower() == "pom.xml":
                             metadata_result = parse_pom_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "package.json":
                             metadata_result = parse_package_json_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
-                        if filename.lower() == "pyproject.toml":
-                            metadata_result = parse_pyproject_toml(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "setup.py":
                             metadata_result = parse_setup_py(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "requirements.txt":
                             metadata_result = parse_requirements_txt(os.path.join(dir_path, filename), metadata_result, build_file_url)
-
+                        if filename.lower() == "bower.json":
+                            metadata_result = parse_bower_json_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename.lower() == "composer.json":
+                            metadata_result = parse_composer_json(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename.endswith(".gemspec"):
+                            metadata_result = parse_gemspec_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename == "DESCRIPTION":
+                            metadata_result = parse_description_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename.lower() == "pyproject.toml" or filename.lower() == "cargo.toml" or filename == "Project.toml":
+                            metadata_result = parse_toml_file(os.path.join(dir_path, filename), metadata_result, build_file_url)                            
+                        if filename.endswith == ".cabal":
+                            metadata_result = parse_cabal_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename.lower() == "publiccode.yml" or filename.lower() == "publiccode.yaml":
+                            metadata_result = parse_publiccode_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        parsed_build_files.add(filename.lower())
+                          
                 # if repo_type == constants.RepositoryType.GITLAB: 
                 if filename.endswith(".yml"):
                     if repo_type == constants.RepositoryType.GITLAB: 
@@ -202,7 +294,15 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                     {
                                                         constants.PROP_VALUE: workflow_url_gitlab,
                                                         constants.PROP_TYPE: constants.URL
-                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)   
+                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)
+                        elif extract_workflows.is_file_workflow(os.path.join(repo_dir, file_path)):
+                            workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
+                                                            repo_dir, repo_relative_path, filename)
+                            metadata_result.add_result(constants.CAT_WORKFLOWS,
+                                                    {
+                                                        constants.PROP_VALUE: workflow_url,
+                                                        constants.PROP_TYPE: constants.URL
+                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)        
                     elif repo_type == constants.RepositoryType.GITHUB:
                         # if file_path.startswith(".github/workflows/"):
                         #     category = constants.CAT_WORKFLOWS
@@ -220,7 +320,23 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                         repo_dir, repo_relative_path, filename)
                             metadata_result.add_result(category,
                                                     {constants.PROP_VALUE: workflow_url, constants.PROP_TYPE: constants.URL},
-                                                    1, constants.TECHNIQUE_FILE_EXPLORATION) 
+                                                    1, constants.TECHNIQUE_FILE_EXPLORATION)
+                            
+                if filename.endswith(".ga") or filename.endswith(".cwl") or filename.endswith(".nf") or (
+                        filename.endswith(".snake") or filename.endswith(
+                    ".smk") or "Snakefile" == filename_no_ext) or filename.endswith(".knwf") or filename.endswith(
+                    ".t2flow") or filename.endswith(".dag") or filename.endswith(".kar") or filename.endswith(
+                    ".wdl"):
+                    analysis = extract_workflows.is_file_workflow(os.path.join(repo_dir, file_path))
+                    if analysis:
+                        workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
+                                                    repo_dir, repo_relative_path, filename)
+                        metadata_result.add_result(constants.CAT_WORKFLOWS,
+                                                {
+                                                    constants.PROP_VALUE: workflow_url,
+                                                    constants.PROP_TYPE: constants.URL
+                                                }, 1, constants.TECHNIQUE_FILE_EXPLORATION)
+                        
             if 'citation' in metadata_result.results:
                 for cit in metadata_result.results['citation']:
                     scholarly_article = {}
@@ -356,6 +472,33 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                 if license_info:
                     result[constants.PROP_NAME] = license_info['name']
                     result[constants.PROP_SPDX_ID] = license_info['spdx_id']
+
+            if category is constants.CAT_AUTHORS:
+                result = {}
+                authors_list = parse_author_file(file_text)
+                for author_l in authors_list:
+
+                    author_data = {
+                                "name": author_l.get("name"),                  
+                                "type": constants.AGENT,
+                                "value": author_l.get("name")
+                            }
+                    
+                    if author_l.get("url") is not None:
+                        author_data["url"] = author_l.get("url")
+                    if author_l.get("email") is not None:
+                        author_data["email"] = author_l.get("email")
+                    if author_l["type"] == "Person":
+                        if author_l.get("last_name") is not None:
+                            author_data["last_name"] = author_l.get("last_name")
+                        if author_l.get("given_name") is not None:    
+                            author_data["given_name"] = author_l.get("given_name")
+                    metadata_result.add_result(
+                            constants.CAT_AUTHORS,
+                            author_data,
+                            1,
+                            constants.TECHNIQUE_FILE_EXPLORATION, url
+                        ) 
             # Properties extraction from cff
             if format_result == 'cff':
                 yaml_content = yaml.safe_load(file_text)
@@ -364,13 +507,13 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                 identifiers = yaml_content.get("identifiers", [])
                 url_citation = preferred_citation.get("url") or yaml_content.get("url")
 
+                if identifiers:
+                    result[constants.CAT_IDENTIFIER] = identifiers
+
                 identifier_url = next((id["value"] for id in identifiers if id["type"] == "url"), None)
                 identifier_doi = next((id["value"] for id in identifiers if id["type"] == "doi"), None)
-    
+
                 title = yaml_content.get("title") or preferred_citation.get("title", None)
-                # doi = preferred_citation.get("doi", None)
-                # url_citation = preferred_citation.get("url", None) 
-                # authors = preferred_citation.get("authors", [])
                 authors = yaml_content.get("authors", [])
 
                 if identifier_doi:
@@ -415,16 +558,8 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
 
                 if author_list:
                     result[constants.PROP_AUTHOR] = author_list
-
-                
-                # author_names = ", ".join(
-                #     f"{a.get('given-names', '').strip()} {a.get('family-names', '').strip()}".strip()
-                #     for a in authors if a.get('given-names') and a.get('family-names')
-                # ) or None  
                 if title:
                     result[constants.PROP_TITLE] = title
-                # if author_names:
-                #     result[constants.PROP_AUTHOR] = author_names
                 if final_url:
                     result[constants.PROP_URL] = final_url
                 if doi:
@@ -510,9 +645,17 @@ def parse_codeowners_structured(dir_path, filename):
             line = line.strip()
             if line and not line.startswith("#"):
                 parts = line.split()
-                path = parts[0]  # Primera parte es el path o patrón
-                owners = parts[1:]  # Lo demás son los propietarios
+                path = parts[0]  
+                owners = parts[1:] 
                 codeowners.append({"path": path, "owners": owners})
 
     return {"codeowners": codeowners}
+
+def clean_text(text):
+    cleaned_lines = []
+    for line in text.splitlines():
+        printable_chars = sum(1 for c in line if c in string.printable)
+        if len(line) == 0 or (printable_chars / len(line)) > 0.9:
+            cleaned_lines.append(line)
+    return "\n".join(cleaned_lines)
 

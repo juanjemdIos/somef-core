@@ -1,0 +1,83 @@
+{
+  "citation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Citation",
+        "type": "Text_excerpt",
+        "value": "```latex\n@inproceedings{\n  author    = {Julien Leblay and Melisachew Wudage Chekol and Xin Liu},\n  title     = {Towards Temporal Knowledge Graph Embeddings with Arbitrary Time Precision},\n  booktitle = {Proceedings of the 29th {ACM} International Conference on Information and Knowledge Management ({CIKM} '20), October 19--23, 2020, Virtual Event, Ireland},\n  publisher = {{ACM}},\n  year      = {2020},\n  url       = {https://doi.org/10.1145/3340531.3412028},\n  doi       = {10.1145/3340531.3412028},\n}\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "full_title": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "String",
+        "value": "ToKEi: Temporal Knowledge Graph Embeddings with Arbitrary Time Precision"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "requirements": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Requirements",
+        "type": "Text_excerpt",
+        "value": "The model is implemented in Python 3, using the PyTorch library.\nOther library requirements are listed in `requirements.txt`.\nTo load them into your preference virtual execution environment, use:\n\n    pip install -r requirements.txt\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "somef_provenance": {
+    "date": "2026-01-20 09:30:23",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.13"
+  },
+  "usage": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Pre-training",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python RotatE/run.py                \\\n            --cuda                                             \\\n            --do_train                                         \\\n            --do_valid                                         \\\n            --do_test                                          \\\n            --data_path data/RotatE/wikidata12k                \\\n            --model RotatE                                     \\\n            -n 256 -b 1024 -d 1000                             \\\n            -g 24.0 -a 1.0 -adv                                \\\n            -lr 0.0001 --max_steps 150000                      \\\n            -save models/RotatE_WD12k --test_batch_size 16 -de\n```\nFor a complete list of options, try:\n\n    python run.py --help\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Training temporal models",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python train.py \n            --seed 0 --data_path data/wikidata12k              \\\n            -n 128 -b 1024 -p 15000 -wu 5000                   \\\n            -a 1.0 -lr 0.0001 --max_steps 45000                \\\n            -save models/RotatE_WD12k_CDY --test_batch_size 16 \\\n            -scope d1100_1_1,d2019_6_30,CDY\n```\nFor more options, try:\n\n    python train.py --help\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Testing pre-trained temporal models",
+        "parent_header": [
+          "Usage"
+        ],
+        "type": "Text_excerpt",
+        "value": "```\n    CUDA_VISIBLE_DEVICES=0 python test.py \n            --data_path data/wikidata12k                       \\\n            -n 128 -b 1024 -p 15000 -wu 5000                   \\\n            -a 1.0 -lr 0.0001 --max_steps 45000                \\\n            -save models/RotatE_WD12k_CDY --test_batch_size 16 \\\n            -scope d1100_1_1,d2019_6_30,CDY                    \\\n\t    --test_levels --test_time --test_scoping --test_ranking\n```\n\nFor more options, try:\n\n    python test.py --help\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ]
+}

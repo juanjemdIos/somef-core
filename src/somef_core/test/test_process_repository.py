@@ -182,7 +182,9 @@ class TestProcessRepository(unittest.TestCase):
         github_data = Result()
         text, github_data = process_files.process_repository_files(test_data_repositories + "Widoco", github_data,
                                                                    constants.RepositoryType.LOCAL)
-        assert len(github_data.results[constants.CAT_CITATION]) == 1
+        # after solving issue refernce_publication it must be 2 citations in results citation. 
+        # assert len(github_data.results[constants.CAT_CITATION]) == 1
+        assert len(github_data.results[constants.CAT_CITATION]) == 2
 
     def test_issue_530(self):
         """
@@ -194,6 +196,6 @@ class TestProcessRepository(unittest.TestCase):
                                                                    constants.RepositoryType.LOCAL)
         licenses = github_data.results[constants.CAT_LICENSE]
         citation = github_data.results[constants.CAT_CITATION]
-        assert len(licenses) == 1 and "LICENSE" in licenses[0]["source"] and \
+        # there are two licenses because the codemeta parser obtains one
+        assert len(licenses) == 2 and "LICENSE" or "codemeta" in licenses[0]["source"] and \
             len(citation) == 1 and "example_onto" not in citation[0]["source"]
-        

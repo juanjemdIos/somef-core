@@ -2,7 +2,7 @@ import unittest
 import os
 from pathlib import Path
 
-from somef.parser.mardown_parser import extract_headers, extract_headers_with_tags, extract_content_per_header, \
+from somef_core.parser.mardown_parser import extract_headers, extract_headers_with_tags, extract_content_per_header, \
     extract_bash, extract_blocks_excerpts, extract_text_excerpts_header, extract_headers_parents, is_header
 
 # Test data for tests

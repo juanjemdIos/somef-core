@@ -3,39 +3,48 @@ import os
 import re
 import markdown
 import requests
+import json
 import validators
 from .utils import constants
 from .process_results import Result
 from urllib.parse import urlparse
+
 import bibtexparser
 
 def extract_title(unfiltered_text, repository_metadata: Result, readme_source) -> Result:
+    from .header_analysis import label_header 
     """
-    Regexp to extract title (first header) from a repository
-    Parameters
-    ----------
-    @param unfiltered_text: repo text
-    @param repository_metadata: Result with the extractions so far
-    @param readme_source: url to the file used (for provenance)
+        Regexp to extract title (first header) from a repository
+        Parameters
+        ----------
+        @param unfiltered_text: repo text
+        @param repository_metadata: Result with the extractions so far
+        @param readme_source: url to the file used (for provenance)
 
-    Returns
-    -------
-    @returns a Result including the title (if found)
-
+        Returns
+        -------
+        @returns a Result including the title (if found)
     """
+
     html_text = markdown.markdown(unfiltered_text)
     splitted = html_text.split("\n")
     index = 0
     limit = len(splitted)
     output = ""
     regex = r'<[^<>]+>'
+    
     while index < limit:
         line = splitted[index]
         if line.startswith("<h"):
             if line.startswith("<h1>"):
-                output = re.sub(regex, '', line)
+                title = re.sub(regex, '', line).strip()
+                header_labels = label_header(title.lower())
+                if not header_labels and title.lower() != "overview":
+                    output = title
             break
         index += 1
+
+   
 
     # If the output is empty or none, the category doesn't make sense and shouldn't be displayed in the final result
     if has_valid_output(output):
@@ -63,7 +72,7 @@ def extract_title_old(unfiltered_text):
     # header declared with ====
     title = ""
     if len(underline_header) != 0:
-        title = re.split('.+[=]+[\n]+', unfiltered_text)[0].strip()
+        title = re.split(r'.+[=]+[\n]+', unfiltered_text)[0].strip()
     else:
         # The first occurrence is assumed to be the title.
         title = re.findall(r'# .+', unfiltered_text)[0]
@@ -72,7 +81,7 @@ def extract_title_old(unfiltered_text):
             title = title[1:].strip()
     # Remove other markup (links, etc.)
     if "[!" in title:
-        title = re.split('\[\!', title)[0].strip()
+        title = re.split(r'\[\!', title)[0].strip()
     return title
 
 
@@ -111,7 +120,8 @@ def extract_readthedocs(readme_text, repository_metadata: Result, readme_source)
             }
             try:
                 # if name of the repo is known then compare against the readthedocs one. Only add it if it's similar/same
-                name_in_link = re.findall('https://([^.]+)\.readthedocs\.io', link)
+                # name_in_link = re.findall('https://([^.]+)\.readthedocs\.io', link)
+                name_in_link = re.findall(r'https://([^.]+)\.readthedocs\.io', link)
                 name_in_link = name_in_link[0]
                 if name == "" or name_in_link.lower() == name.lower():
                     repository_metadata.add_result(constants.CAT_DOCUMENTATION, result, 1,
@@ -424,6 +434,30 @@ def extract_package_distributions(unfiltered_text, repository_metadata: Result, 
                                            constants.PROP_TYPE: constants.URL,
                                            constants.PROP_VALUE: output
                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, readme_source)
+            
+    matches = re.findall(constants.REGEXP_PACKAGE_MANAGER, unfiltered_text, re.VERBOSE)
+    found_urls = set()  
+
+    for match in matches:
+        try:
+            response = requests.get(match, timeout=5)
+            final_url = response.url
+        except requests.RequestException:
+            final_url = match
+
+        if final_url not in found_urls and has_valid_output(final_url):
+            found_urls.add(final_url)
+            repository_metadata.add_result(
+                constants.CAT_PACKAGE_DISTRIBUTION,
+                {
+                    constants.PROP_TYPE: constants.URL,
+                    constants.PROP_VALUE: final_url
+                },
+                1,
+                constants.TECHNIQUE_REGULAR_EXPRESSION,
+                readme_source
+            )
+
 
     return repository_metadata
 
@@ -541,16 +575,231 @@ def extract_doi_badges(readme_text, repository_metadata: Result, source) -> Resu
     """
     # regex = r'\[\!\[DOI\]([^\]]+)\]\(([^)]+)\)'
     # regex = r'\[\!\[DOI\]\(.+\)\]\(([^)]+)\)'
+
     doi_badges = re.findall(constants.REGEXP_DOI, readme_text)
     # The identifier is in position 1. Position 0 is the badge id, which we don't want to export
-    for doi in doi_badges:
-        repository_metadata.add_result(constants.CAT_IDENTIFIER,
-                                       {
-                                           constants.PROP_TYPE: constants.URL,
-                                           constants.PROP_VALUE: doi[1]
-                                       }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+    if not doi_badges:
+        match = re.search(constants.REGEXP_ZENODO_LATEST_DOI, readme_text)
+        badge_url = None
+        if match:
+            badge_url = match.group(1)
+        else:
+            match = re.search(constants.REGEXP_ZENODO_DOI, readme_text)
+            if match:
+                badge_url = match.group(0)
+        try:
+            if badge_url is not None:
+                response = requests.get(badge_url, allow_redirects=True, timeout=10)
+                match = re.search(constants.REGEXP_ZENODO_JSON_LD,
+                    response.text,
+                    re.DOTALL | re.IGNORECASE
+                )
+                if match:
+                    json_ld_text = match.group(1).strip()
+                    try:
+                        json_ld_data = json.loads(json_ld_text)
+                        identifier = json_ld_data.get('identifier')
+                        repository_metadata.add_result(constants.CAT_IDENTIFIER,
+                            {
+                                constants.PROP_TYPE: constants.URL,
+                                constants.PROP_VALUE: identifier,
+                            }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+                    except json.JSONDecodeError:
+                        logging.warning("Error parsing Zenodo JSON-LD")
+        except requests.RequestException as e:
+            logging.warning(f"Error fetching DOI from Zenodo badge: {e}")
+    else:
+
+        for doi in doi_badges:
+            repository_metadata.add_result(constants.CAT_IDENTIFIER,
+                                        {
+                                            constants.PROP_TYPE: constants.URL,
+                                            constants.PROP_VALUE: doi[1]
+                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+        
     return repository_metadata
 
+def extract_project_homepage_badges(readme_text, repository_metadata: Result, source) -> Result:
+    """
+    Function that takes the text of a readme file and searches if there are any project homepages.
+    Parameters
+    ----------
+    @param readme_text: Text of the readme
+    @param repository_metadata: Result with all the findings in the repo
+    @param source: source file on top of which the extraction is performed (provenance)
+    Returns
+    -------
+    @returns Result with the Sofware heritage badges found
+    """
+    homepage_badges = re.findall(constants.REGEXP_PROJECT_HOMEPAGE, readme_text)
+    # The identifier is in position 1. Position 0 is the badge id, which we don't want to export
+
+    for homepage in homepage_badges:
+        repository_metadata.add_result(constants.CAT_HOMEPAGE,
+                                       {
+                                           constants.PROP_TYPE: constants.URL,
+                                           constants.PROP_VALUE: homepage[1]
+                                       }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+        
+    return repository_metadata
+
+
+# def extract_readthedocs_badgeds(readme_text, repository_metadata: Result, source) -> Result:
+#     """
+#     Function that takes the text of a readme file and searches if there are readthedocs badges.
+#     Parameters
+#     ----------
+#     @param readme_text: Text of the readme
+#     @param repository_metadata: Result with all the findings in the repo
+#     @param source: source file on top of which the extraction is performed (provenance)
+#     Returns
+#     -------
+#     @returns Result with the readthedocs badges found
+#     """
+#     print("--------------------------> Extracting readthedocs badges")
+#     readthedocs_badges = re.findall(constants.REGEXP_READTHEDOCS_BADGES, readme_text, re.DOTALL)
+#     print(readthedocs_badges)
+#     for doc in readthedocs_badges:
+#         print(f'Doc found: {doc}')
+#         url = doc[0] or doc[1]
+#         if url:
+#             repository_metadata.add_result(constants.CAT_DOCUMENTATION,
+#                                        {
+#                                            constants.PROP_TYPE: constants.URL,
+#                                            constants.PROP_VALUE: url
+#                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+
+#     return repository_metadata
+
+
+def extract_readthedocs_badgeds(readme_text, repository_metadata: Result, source) -> Result:
+    """
+    Function that takes the text of a readme file and searches if there are readthedocs badges.
+    Parameters
+    ----------
+    @param readme_text: Text of the readme
+    @param repository_metadata: Result with all the findings in the repo
+    @param source: source file on top of which the extraction is performed (provenance)
+    Returns
+    -------
+    @returns Result with the readthedocs badges found
+    """
+
+    urls = set()
+
+    # RST
+    for match in re.findall(constants.REGEXP_READTHEDOCS_RST, readme_text):
+        print(match)
+        if isinstance(match, tuple):
+            urls.update([u for u in match if u])
+        elif match:
+            urls.add(match)
+
+    # Markdown
+    for match in re.findall(constants.REGEXP_READTHEDOCS_MD, readme_text):
+        if isinstance(match, tuple):
+            urls.update([u for u in match if u])
+        elif match:
+            urls.add(match)
+
+    # HTML
+    pattern_html = re.compile(constants.REGEXP_READTHEDOCS_HTML, flags=re.VERBOSE |re.DOTALL | re.IGNORECASE)
+    for match in pattern_html.findall(readme_text):
+        if isinstance(match, tuple):
+            urls.update([u for u in match if u])
+        elif match:
+            urls.add(match)
+
+    for url in urls:
+        if "pypi.org/project" in url: 
+            category = constants.CAT_PACKAGE_DISTRIBUTION 
+        else: 
+            category = constants.CAT_DOCUMENTATION
+
+        repository_metadata.add_result(
+            category,
+            {
+                constants.PROP_TYPE: constants.URL,
+                constants.PROP_VALUE: url
+            },
+            1,
+            constants.TECHNIQUE_REGULAR_EXPRESSION,
+            source
+        )
+
+    return repository_metadata
+
+# def extract_package_manager_badgeds(readme_text, repository_metadata: Result, source) -> Result:
+#     """
+#     Function that takes the text of a readme file and searches if there are package manager badges.
+#     Parameters
+#     ----------
+#     @param readme_text: Text of the readme
+#     @param repository_metadata: Result with all the findings in the repo
+#     @param source: source file on top of which the extraction is performed (provenance)
+#     Returns
+#     -------
+#     @returns Result with the package badges found
+#     """
+#     package_manager_badges = re.findall(constants.REGEXP_READTHEDOCS_BADGES, readme_text, re.DOTALL)
+#     for package in package_manager_badges:
+#         repository_metadata.add_result(constants.CAT_DOCUMENTATION,
+#                                        {
+#                                            constants.PROP_TYPE: constants.URL,
+#                                            constants.PROP_VALUE: package
+#                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+
+
+#     return repository_metadata
+
+
+def extract_swh_badges(readme_text, repository_metadata: Result, source) -> Result:
+    """
+    Function that takes the text of a readme file and searches if there are any Software Heritage (swh) badges.
+    Parameters
+    ----------
+    @param readme_text: Text of the readme
+    @param repository_metadata: Result with all the findings in the repo
+    @param source: source file on top of which the extraction is performed (provenance)
+    Returns
+    -------
+    @returns Result with the Sofware heritage badges found
+    """
+    swh_badges = re.findall(constants.REGEXP_SWH, readme_text)
+    # The identifier is in position 1. Position 0 is the badge id, which we don't want to export
+
+    for swh in swh_badges:
+
+        identifier = extract_swh_identifier_from_url(swh[1])
+        if identifier:
+            url_identifier = constants.SWH_ROOT + identifier
+            repository_metadata.add_result(constants.CAT_IDENTIFIER,
+                                       {
+                                           constants.PROP_TYPE: constants.URL,
+                                           constants.PROP_VALUE: url_identifier
+                                       }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+        
+    return repository_metadata
+
+def extract_swh_identifier_from_url(url: str) -> str | None:
+    """
+    Function that look for a correct identifier en the swh url
+    """
+
+    #  If anchor look for identifier
+    anchor_match = re.search(constants.REGEXP_SWH_ANCHOR, url)
+    if anchor_match:
+        return anchor_match.group(1)
+
+    #  If no anchor look for all identifiers
+    all_matches = re.findall(constants.REGEXP_SWH_ALL_IDENTIFIERS, url)
+    if all_matches:
+        for preferred_type in ['rev', 'snp', 'dir', 'cnt']:
+            for match in all_matches:
+                if f"swh:1:{preferred_type}:" in match:
+                    return match
+
+    return None
 
 def extract_binder_links(readme_text, repository_metadata: Result, source) -> Result:
     """
@@ -654,6 +903,7 @@ def detect_license_spdx(license_text, type):
     -------
     A JSON dictionary with name and spdx id
     """
+
     for license_name, license_info in constants.LICENSES_DICT.items():
         if re.search(license_info["regex"], license_text, re.IGNORECASE):
             if type == 'JSON':
@@ -667,16 +917,28 @@ def detect_license_spdx(license_text, type):
                     "name": license_name,
                     "identifier": f"https://spdx.org/licenses/{license_info['spdx_id']}"
                 }
+    for license_name, license_info in constants.LICENSES_DICT.items():
+        spdx_id = license_info["spdx_id"]
+        if re.search(rf'\b{re.escape(spdx_id)}\b', license_text, re.IGNORECASE):
+            return {
+                "name": license_name,
+                "spdx_id": spdx_id,
+                "@id": f"https://spdx.org/licenses/{spdx_id}"
+            }
     return None
 
-# def detect_license(license_text):
-#     for license_name, license_info in constants.LICENSES_DICT.items():
-#         if re.search(license_info["regex"], license_text, re.IGNORECASE):
-#             return {
-#                 "name": license_name,
-#                 "identifier": f"https://spdx.org/licenses/{license_info['spdx_id']}"
-#             }
-#     return None
+def detect_spdx_from_declared(value: str):
+    """
+    Check if declared license matches an SPDX ID in LICENSES_DICT.
+    """
+    for name, info in constants.LICENSES_DICT.items():
+        if value == info["spdx_id"]:
+            return {
+                "name": name,
+                "spdx_id": info["spdx_id"],
+                "@id": f"https://spdx.org/licenses/{info['spdx_id']}"
+            }
+    return None
 
 def extract_scholarly_article_properties(bibtex_entry, scholarlyArticle, type):
     """

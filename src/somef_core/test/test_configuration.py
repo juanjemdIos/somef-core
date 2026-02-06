@@ -1,6 +1,6 @@
 import unittest
 from ..configuration import get_configuration_file
-from somef.utils import constants
+from somef_core.utils import constants
 
 
 class TestConfiguration(unittest.TestCase):

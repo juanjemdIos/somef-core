@@ -1,5 +1,5 @@
 import sys
-from uu import encode
+# from uu import encode
 
 import validators
 import logging
@@ -13,11 +13,12 @@ from .process_results import Result
 from .utils import constants, markdown_utils
 from .parser import mardown_parser, create_excerpts
 from .export import json_export
+from .extract_software_type import check_repository_type
 from urllib.parse import urlparse, quote
 
 def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, local_repo=None,
                  ignore_github_metadata=False, readme_only=False, keep_tmp=None, authorization=None,
-                 ignore_test_folder=True) -> Result:
+                 ignore_test_folder=True,requirements_mode='all') -> Result:
     """
     Main function to get the data through the command line
     Parameters
@@ -32,6 +33,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
     @param keep_tmp: path where to store TMP files in case SOMEF is instructed to keep them
     @param authorization: GitHub authorization token
     @param ignore_test_folder: Ignore contents of test folders
+    @param requiriments_mode: flag to indicate what requirements show in codemeta 
 
     Returns
     -------
@@ -67,6 +69,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                 logging.info(f"{servidor} is GitLab.")
                 bGitLab = True
 
+            print(f"DEBUG: {servidor} is_gitlab = {bGitLab}")
             if bGitLab:
                 repo_type = constants.RepositoryType.GITLAB
             repository_metadata, owner, repo_name, def_branch = process_repository.load_online_repository_metadata(
@@ -86,22 +89,35 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                 os.makedirs(keep_tmp, exist_ok=True)
                 local_folder = process_repository.download_repository_files(owner, repo_name, def_branch, repo_type,
                                                                             keep_tmp, repo_url, authorization)
-                readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
+                if local_folder is not None:
+                    readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
                                                                                                repository_metadata,
                                                                                                repo_type, owner,
                                                                                                repo_name,
                                                                                                def_branch,
-                                                                                              ignore_test_folder)
+                                                                                               ignore_test_folder)
+                    repository_metadata = check_repository_type(local_folder, repo_name, full_repository_metadata)
+                else:
+                    logging.error("Error processing the target repository")
+                    return repository_metadata
             else:  # Use a temp directory
+              
                 with tempfile.TemporaryDirectory() as temp_dir:
                     local_folder = process_repository.download_repository_files(owner, repo_name, def_branch, repo_type,
                                                                                 temp_dir, repo_url, authorization)
-                    readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
-                                                                                                   repository_metadata,
-                                                                                                   repo_type, owner,
-                                                                                                   repo_name,
-                                                                                                   def_branch,
+                    if local_folder is not None:
+                        readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
+                                                                                                    repository_metadata,
+                                                                                                    repo_type, owner,
+                                                                                                    repo_name,
+                                                                                                    def_branch,
                                                                                                     ignore_test_folder)
+
+                        repository_metadata = check_repository_type(local_folder, repo_name, full_repository_metadata)
+                    else:
+                        logging.error("Error processing the target repository")
+                        return repository_metadata
+                    
             if readme_text == "":
                 logging.warning("README document does not exist in the target repository")
         except process_repository.GithubUrlError:
@@ -130,7 +146,11 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
         readme_unfiltered_text = markdown_utils.remove_comments(readme_unfiltered_text)
         repository_metadata, string_list = header_analysis.extract_categories(readme_unfiltered_text,
                                                                               repository_metadata)
+        
+        logging.info("Extracted categories from headers successfully.")
         readme_text_unmarked = markdown_utils.unmark(readme_text)
+        logging.info("readme text unmarked successfully.") 
+
         if readme_text_unmarked != "":
             try:
                 readme_source = repository_metadata.results[constants.CAT_README_URL][0]
@@ -141,11 +161,17 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                                                                      readme_source)
             repository_metadata = regular_expressions.extract_doi_badges(readme_unfiltered_text, repository_metadata,
                                                                          readme_source)
+            repository_metadata = regular_expressions.extract_swh_badges(readme_unfiltered_text, repository_metadata,
+                                                                         readme_source)
+            repository_metadata = regular_expressions.extract_project_homepage_badges(readme_unfiltered_text, repository_metadata,
+                                                                         readme_source)
             repository_metadata = regular_expressions.extract_title(readme_unfiltered_text, repository_metadata,
                                                                     readme_source)
             repository_metadata = regular_expressions.extract_binder_links(readme_unfiltered_text, repository_metadata,
                                                                            readme_source)
             repository_metadata = regular_expressions.extract_readthedocs(readme_unfiltered_text, repository_metadata,
+                                                                          readme_source)
+            repository_metadata = regular_expressions.extract_readthedocs_badgeds(readme_unfiltered_text, repository_metadata,
                                                                           readme_source)
             repository_metadata = regular_expressions.extract_repo_status(readme_unfiltered_text, repository_metadata,
                                                                           readme_source)
@@ -191,7 +217,8 @@ def run_cli(*,
             pretty=False,
             missing=False,
             keep_tmp=None,
-            ignore_test_folder=True
+            ignore_test_folder=True,
+            requirements_mode="all"
             ):
     """Function to run all the required components of the cli for a repository"""
     # check if it is a valid url
@@ -225,7 +252,7 @@ def run_cli(*,
                     encoded_url = encoded_url.replace(".","") #removing dots just in case
                     repo_data = cli_get_data(threshold=threshold, ignore_classifiers=ignore_classifiers, repo_url=repo_url,
                                              ignore_github_metadata=ignore_github_metadata, readme_only=readme_only,
-                                             keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder)
+                                             keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder, requirements_mode=requirements_mode)
                     
                     if output is not None:
                         output = output.replace(".json","")
@@ -234,7 +261,7 @@ def run_cli(*,
                     if codemeta_out is not None:
                         codemeta_out = codemeta_out.replace(".json", "")
                         codemeta_out = codemeta_out + "_" + encoded_url + ".json"
-                        json_export.save_codemeta_output(repo_data.results, codemeta_out, pretty=pretty)
+                        json_export.save_codemeta_output(repo_data.results, codemeta_out, pretty=pretty, requirements_mode= requirements_mode)
                 except:
                     logging.error("Error when processing repo: " + repo_url)
         else:
@@ -255,7 +282,7 @@ def run_cli(*,
         if output is not None:
             json_export.save_json_output(repo_data.results, output, missing, pretty=pretty)
         if codemeta_out is not None:
-            json_export.save_codemeta_output(repo_data.results, codemeta_out, pretty=pretty)
+            json_export.save_codemeta_output(repo_data.results, codemeta_out, pretty=pretty, requirements_mode=requirements_mode)
 
 
 

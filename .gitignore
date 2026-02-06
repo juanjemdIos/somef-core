@@ -1,10 +1,12 @@
 build/*
 dist/*
 env*/*
+somef_core_env/
 .vscode/
 .ipynb_checkpoints/
 config.json
 __pycache__/
+**/__pycache__/
 .DS_Store
 Lib/*
 Scripts/*
@@ -13,7 +15,7 @@ Scripts/*
 *.ttl
 env_3.9/*
 src/somef_core/create_corpus_for_NER.py
-src/somef.egg-info/*
+src/somef_core.egg-info/*
 local_tests/*
 Dockerfile_old
 repos.txt

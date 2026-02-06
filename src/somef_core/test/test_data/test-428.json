@@ -1,0 +1,187 @@
+{
+  "contributing_guidelines": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Contributing",
+        "type": "Text_excerpt",
+        "value": "Is always welcome.  As mentioned above, the [community edition](https://github.com/ManimCommunity/manim) has the most active ecosystem for contributions, with testing and continuous integration, but pull requests are welcome here too.  Please explain the motivation for a given change and examples of its effect.\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "documentation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Documentation",
+        "parent_header": [
+          "Using manim"
+        ],
+        "type": "Text_excerpt",
+        "value": "Documentation is in progress at [3b1b.github.io/manim](https://3b1b.github.io/manim/). And there is also a Chinese version maintained by [**@manim-kindergarten**](https://manim.org.cn): [docs.manim.org.cn](https://docs.manim.org.cn/) (in Chinese).\n\n[manim-kindergarten](https://github.com/manim-kindergarten/) wrote and collected some useful extra classes and some codes of videos in [manim_sandbox repo](https://github.com/manim-kindergarten/manim_sandbox).\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "images": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://raw.githubusercontent.com/3b1b/manim/master/logo/cropped.png"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ],
+  "installation": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Installation",
+        "type": "Text_excerpt",
+        "value": "> **WARNING:** These instructions are for ManimGL _only_. Trying to use these instructions to install [ManimCommunity/manim](https://github.com/ManimCommunity/manim) or instructions there to install this version will cause problems. You should first decide which version you wish to install, then only follow the instructions for your desired version.\n> \n> **Note**: To install manim directly through pip, please pay attention to the name of the installed package. This repository is ManimGL of 3b1b. The package name is `manimgl` instead of `manim` or `manimlib`. Please use `pip install manimgl` to install the version in this repository.\n\nManim runs on Python 3.6 or higher (Python 3.8 is recommended).\n\nSystem requirements are [FFmpeg](https://ffmpeg.org/), [OpenGL](https://www.opengl.org/) and [LaTeX](https://www.latex-project.org) (optional, if you want to use LaTeX).\nFor Linux, [Pango](https://pango.gnome.org) along with its development headers are required. See instruction [here](https://github.com/ManimCommunity/ManimPango#building).\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Directly",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "```sh\n# Install manimgl\npip install manimgl\n\n# Try it out\nmanimgl\n```\n\nFor more options, take a look at the [Using manim](#using-manim) sections further below.\n\nIf you want to hack on manimlib itself, clone this repository and in that directory execute:\n\n```sh\n# Install manimgl\npip install -e .\n\n# Try it out\nmanimgl example_scenes.py OpeningManimExample\n# or\nmanim-render example_scenes.py OpeningManimExample\n```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Directly (Windows)",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "1. [Install FFmpeg](https://www.wikihow.com/Install-FFmpeg-on-Windows).\n2. Install a LaTeX distribution. [MiKTeX](https://miktex.org/download) is recommended.\n3. Install the remaining Python packages.\n    ```sh\n    git clone https://github.com/3b1b/manim.git\n    cd manim\n    pip install -e .\n    manimgl example_scenes.py OpeningManimExample\n    ```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Mac OSX",
+        "parent_header": [
+          "Installation"
+        ],
+        "type": "Text_excerpt",
+        "value": "1. Install FFmpeg, LaTeX in terminal using homebrew.\n    ```sh\n    brew install ffmpeg mactex\n    ```\n   \n2. Install latest version of manim using these command.\n    ```sh\n    git clone https://github.com/3b1b/manim.git\n    cd manim\n    pip install -e .\n    manimgl example_scenes.py OpeningManimExample\n    ```\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "Anaconda Install",
+        "type": "Text_excerpt",
+        "value": "1. Install LaTeX as above.\n2. Create a conda environment using `conda create -n manim python=3.8`.\n3. Activate the environment using `conda activate manim`.\n4. Install manimgl using `pip install -e .`.\n\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "license": [
+    {
+      "confidence": 1,
+      "result": {
+        "original_header": "License",
+        "type": "Text_excerpt",
+        "value": "This project falls under the MIT license.\n"
+      },
+      "source": null,
+      "technique": "header_analysis"
+    }
+  ],
+  "somef_missing_categories": [
+    "application_domain",
+    "acknowledgement",
+    "authors",
+    "citation",
+    "contributors",
+    "continuous_integration",
+    "code_of_conduct",
+    "code_repository",
+    "contact",
+    "description",
+    "date_created",
+    "date_updated",
+    "download",
+    "download_url",
+    "executable_example",
+    "faq",
+    "forks_count",
+    "forks_url",
+    "full_name",
+    "full_title",
+    "has_build_file",
+    "has_script_file",
+    "identifier",
+    "invocation",
+    "issue_tracker",
+    "homepage",
+    "keywords",
+    "logo",
+    "name",
+    "ontologies",
+    "owner",
+    "package_distribution",
+    "has_package_file",
+    "programming_languages",
+    "readme_url",
+    "related_documentation",
+    "releases",
+    "run",
+    "runtime_platform",
+    "related_papers",
+    "repository_status",
+    "requirements",
+    "stargazers_count",
+    "support",
+    "usage",
+    "workflows",
+    "type"
+  ],
+  "somef_provenance": {
+    "date": "2026-01-20 09:38:32",
+    "somef_schema_version": "1.0.0",
+    "somef_version": "0.9.13"
+  },
+  "support_channels": [
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://www.reddit.com/r/manim/"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    },
+    {
+      "confidence": 1,
+      "result": {
+        "type": "Url",
+        "value": "https://discord.com/invite/bYCyhM9Kz2"
+      },
+      "source": "README.md",
+      "technique": "regular_expression"
+    }
+  ]
+}

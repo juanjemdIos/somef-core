@@ -30,7 +30,6 @@ def is_gitlab(gitlab_server):
     api_url = f"https://{gitlab_server}/api/v4/projects"
     try:
         response = requests.get(api_url, timeout=5)
-        print(response.status_code)
         if response.status_code in [200, 401, 403]: 
             return True
     except requests.RequestException:
@@ -38,14 +37,51 @@ def is_gitlab(gitlab_server):
     return False
 
 # the same as requests.get(args).json(), but protects against rate limiting
-def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, **kwargs):
+def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=constants.SIZE_DOWNLOAD_LIMIT_MB, **kwargs):
+# def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, **kwargs):
     """Function to obtain how many requests we have pending with the GitHub API"""
+
+    """GET request that handles rate limiting and prevents downloading excessively large files"""
+    size_limit_bytes = size_limit_mb * 1024 * 1024
+    url = args[0] if args else kwargs.get("url")
+    if not url:
+        raise ValueError("Missing URL in rate_limit_get")
+    
+    parsed = urlparse(url)
+    is_api_request = "api.github.com" in parsed.netloc
+    content_length = None
+    # just verify size if NOT is a request to api.github.com
+    if not is_api_request:
+        try:
+            head_response = requests.get(url, stream=True, allow_redirects=True, **kwargs)
+            content_length = head_response.headers.get("Content-Length")
+            if content_length is not None:
+                size_bytes = int(content_length)
+                print(f"HEAD Content-Length: {size_bytes}")
+                if size_bytes > size_limit_bytes:
+                    logging.warning(
+                        f"Download size {size_bytes} bytes exceeds limit of {size_limit_bytes} bytes. Skipping download."
+                    )
+                    return None, None
+            else:
+                # logging.warning(f"Could not determine file size for {url}. Skipping download.")
+                # return None, None
+                logging.warning(f"No Content-Length header for {url}. Proceeding with download anyway (unable to estimate size).")
+        except Exception as e:
+            logging.warning(f"HEAD/stream request failed: {e}. Continuing with GET...")
+
     rate_limited = True
-    response = {}
     date = ""
+    response = {}
     while rate_limited:
-        response = requests.get(*args, **kwargs)
-        date = response.headers["Date"]
+        use_stream = not is_api_request and (content_length is None or int(content_length) > 10 * 1024 * 1024)
+        response = requests.get(
+            *args,
+            timeout=(constants.DOWNLOAD_TIMEOUT_SECONDS, constants.DOWNLOAD_TIMEOUT_SECONDS),
+            stream=use_stream,
+            **kwargs
+        )
+        date = response.headers.get("Date", "")
         # Show rate limit information if available
         if "X-RateLimit-Remaining" in response.headers:
             rate_limit_remaining = response.headers["X-RateLimit-Remaining"]
@@ -54,14 +90,54 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, **kwargs):
             logging.info(
                 "Remaining GitHub API requests: " + rate_limit_remaining + " ### Next rate limit reset at: " + str(
                     date_reset))
-        if 'message' in response and 'API rate limit exceeded' in response['message']:
-            rate_limited = True
-            logging.warning(f"rate limited. Backing off for {initial_backoff} seconds")
-            time.sleep(initial_backoff)
-            # increase the backoff for next time
-            initial_backoff *= backoff_rate
-        else:
-            rate_limited = False
+            
+            if not use_stream:
+                try:
+                    json_data = response.json()
+                    msg = json_data.get("message", "")
+                    if "API rate limit exceeded" in msg:
+                        rate_limited = True
+                        logging.warning(f"Rate limited. Backing off for {initial_backoff} seconds")
+                        time.sleep(initial_backoff)
+                        initial_backoff *= backoff_rate
+                        continue
+                except Exception:
+                    pass
+
+        rate_limited = False
+
+    if not is_api_request and use_stream:
+        content = bytearray()
+        total_read = 0
+        chunk_size = 1024 * 1024  # 1 MB
+        start_time = time.monotonic()
+
+        try:
+            for i, chunk in enumerate(response.iter_content(chunk_size=chunk_size)):
+                if not chunk:
+                    # logging.debug(f"Chunk {i} empty, continue...")
+                    continue
+
+                # logging.debug(f"Chunk read {i}: {len(chunk)} bytes")
+                content.extend(chunk)
+                total_read += len(chunk)
+
+                # Comprobar límite de tamaño
+                if total_read > size_limit_bytes:
+                    logging.warning(f"Downloaded content exceeded {size_limit_bytes} bytes. Aborting.")
+                    return None, None
+
+                # Comprobar límite de tiempo
+                elapsed = time.monotonic() - start_time
+                if elapsed > constants.DOWNLOAD_TIMEOUT_SECONDS:
+                    logging.warning(f"Download exceeded time limit ({elapsed:.2f}s). Aborting.")
+                    return None, None
+
+        except Exception as e:
+            logging.warning(f"Error while streaming: {e}")
+            return None, None
+        
+        response._content = bytes(content)
 
     return response, date
 
@@ -148,6 +224,26 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
             elif zip_gz_entry:
                 value = zip_gz_entry["url"]
 
+            if category == constants.CAT_ASSETS:
+                assets_release_list_filtered = []
+                for source in release[constants.CAT_ASSETS]['sources']:
+                    source_asset = {
+                        constants.PROP_ENCODING_FORMAT: source[constants.PROP_FORMAT],
+                        constants.PROP_CONTENT_URL: source[constants.PROP_URL]
+                    }
+                    assets_release_list_filtered.append(source_asset)
+
+                for link in release[constants.CAT_ASSETS]['links']:
+                    link_asset = {
+                        constants.PROP_NAME: link[constants.PROP_NAME],
+                        constants.PROP_ENCODING_FORMAT: link["link_type"],
+                        constants.PROP_URL: constants.PROP_URL,
+                        constants.PROP_CONTENT_URL: link["direct_asset_url"],
+                    }
+                    assets_release_list_filtered.append(link_asset)
+
+                value = assets_release_list_filtered 
+        
             if value: 
                 release_obj[category] = value
             else:
@@ -362,10 +458,17 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization):
     logging.info(f"Downloading {primary_url}")
 
     repo_download, date = rate_limit_get(primary_url, headers=header_template(authorization))
+
+    if repo_download is None:
+        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
+        return None   
     if repo_download.status_code == 404:
         logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
         logging.info(f"Trying to download {secondary_url}")
         repo_download, date = rate_limit_get(secondary_url, headers=header_template(authorization))
+        if repo_download is None:
+            logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
+            return None      
     if repo_download.status_code != 200:
         logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
         return None
@@ -440,7 +543,12 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
     date = ""
     if not ignore_api_metadata:
         general_resp_raw, date = rate_limit_get(repo_api_base_url, headers=header)
+        if general_resp_raw is None:
+            logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
+            return repository_metadata, "", "", ""
+        
         general_resp = general_resp_raw.json()
+ 
     if 'message' in general_resp:
         if general_resp['message'] == "Not Found":
             logging.error("Error: Repository name is private or incorrect")
@@ -474,7 +582,7 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
                 value = '%s,' % (', '.join(value))
                 value = value.rstrip(',')
             if category in [constants.CAT_CODE_REPOSITORY, constants.CAT_ISSUE_TRACKER,
-                            constants.CAT_DOWNLOAD_URL, constants.CAT_FORKS_URLS]:
+                            constants.CAT_DOWNLOAD_URL, constants.CAT_FORKS_URLS, constants.CAT_HOMEPAGE]:
                 value_type = constants.URL
             if category in [constants.CAT_DATE_CREATED, constants.CAT_DATE_UPDATED]:
                 value_type = constants.DATE
@@ -494,12 +602,13 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
                     constants.PROP_VALUE: value,
                     constants.PROP_TYPE: value_type
                 }
-            
+
             if (result['value']):
                 repository_metadata.add_result(category, result, 1, constants.TECHNIQUE_GITHUB_API)
     # get languages
     if not ignore_api_metadata:
         languages_raw, date = rate_limit_get(filtered_resp['languages_url'], headers=header)
+        
         languages = languages_raw.json()
         if "message" in languages:
             logging.error("Error while retrieving languages: " + languages["message"])
@@ -537,7 +646,6 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
                         value = {
                             constants.PROP_NAME: value,
                             constants.PROP_TYPE: release[constants.AGENT_TYPE]
-
                         }
                     if value != "":
                         release_obj[category] = value
@@ -582,8 +690,7 @@ def get_path(obj, path):
 
 def do_crosswalk(data, crosswalk_table):
     output = {}
-    # print('------------data realeases')
-    # print(data)
+
     for somef_key, path in crosswalk_table.items():
         value = get_path(data, path)
         if value is not None:
@@ -641,12 +748,20 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
     repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/{repo_ref}.zip"
     logging.info(f"Downloading {repo_archive_url}")
     repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
+
+    if repo_download is None:
+        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content lenght.")
+        return None
+    
     if repo_download.status_code == 404:
         logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
         repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/main.zip"
         logging.info(f"Trying to download {repo_archive_url}")
         repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
-
+        if repo_download is None:
+            logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content lenght.")
+            return None
+        
     if repo_download.status_code != 200:
         sys.exit(f"Error: Archive request failed with HTTP {repo_download.status_code}")
 
@@ -659,13 +774,19 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
     with open(repo_zip_file, "wb") as f:
         f.write(repo_zip)
 
-    with zipfile.ZipFile(repo_zip_file, "r") as zip_ref:
-        zip_ref.extractall(repo_extract_dir)
-
+    try:
+        with zipfile.ZipFile(repo_zip_file, "r") as zip_ref: 
+            zip_ref.extractall(repo_extract_dir) 
+    except zipfile.BadZipFile: 
+        logging.error("Downloaded archive is not a valid zip (repo may be empty)") 
+        return None
+    
     repo_folders = os.listdir(repo_extract_dir)
+    if not repo_folders: 
+        logging.warning("Repository archive is empty") 
+        return None
 
     repo_dir = os.path.join(repo_extract_dir, repo_folders[0])
-
     return repo_dir
 
 
@@ -715,34 +836,34 @@ def get_all_gitlab_releases(repo_api_base_url):
 
     while True:
         url = f"{repo_api_base_url}/releases?page={page}&per_page=100"
-        logging.info(f"Obteniendo releases desde: {url}")
+        logging.info(f"Getting releases from: {url}")
         response = requests.get(url)
-        logging.info(f"Respuesta: {response.status_code}")
+        logging.info(f"Response: {response.status_code}")
         content_type = response.headers.get("Content-Type", "")
         if response.status_code != 200 or "application/json" not in content_type:
-            logging.error(f"Error en la respuesta o no es JSON: {response.text}")
-            break  # Termina el bucle si la respuesta no es válida
+            logging.error(f"Error in response or not JSON: {response.text}")
+            break 
 
         try:
             releases = response.json()
         except requests.exceptions.JSONDecodeError as e:
-            logging.error(f"Error al decodificar JSON: {e}. Respuesta: {response.text}")
+            logging.error(f"Error decoding JSON: {e}. Response: {response.text}")
             break
 
         if not releases:
-            break  # Si ya no hay releases, termina el bucle
+            break 
 
         all_releases.extend(releases)
 
-        # Verifica si hay más páginas
+        # check if more pages
         next_page = response.headers.get("X-Next-Page")
         if not next_page:
-            break  # Si no hay más páginas, termina el bucle
+            break  # No more pages
 
         page = int(next_page)
 
     if not all_releases:
-        logging.warning("No se encontraron releases.")
+        logging.warning("Not releseases found.")
         return []
     
 
@@ -760,25 +881,24 @@ def get_all_gitlab_releases(repo_api_base_url):
 
 def get_gitlab_releases(project_id, base_url):
     """
-    Obtiene las releases de un repositorio en GitLab sin autenticación.
-    
-    :param project_id: ID del proyecto en GitLab
-    :param base_url: URL base del GitLab donde está alojado el proyecto (ej: https://gitlab.in2p3.fr)
-    :return: Lista de releases con información relevante
+        Retrieves the releases of a GitLab repository without authentication.
+        
+        :param project_id: ID of the project in GitLab
+        :param base_url: Base URL of the GitLab where the project is hosted (e.g., https://gitlab.in2p3.fr)
+        :return: List of releases with relevant information
     """
     releases_url = f"{base_url}/api/v4/projects/{project_id}/releases"
 
-    logging.info(f"Obteniendo releases desde: {releases_url}")
+    logging.info(f"Getting releases from: {releases_url}")
 
     response = requests.get(releases_url)
     
     if response.status_code != 200:
-        logging.error(f"Error obteniendo releases: {response.text}")
+        logging.error(f"Error getting releases: {response.text}")
         return []
 
     releases_list = response.json()
     
-    # Filtrar información relevante
     release_list_filtered = [
         {
             "url": release.get("description"),
@@ -793,7 +913,6 @@ def get_gitlab_releases(project_id, base_url):
 
 # error when github url is wrong
 class GithubUrlError(Exception):
-    # print("The URL provided seems to be incorrect")
     pass
 
 
@@ -821,7 +940,6 @@ def get_all_paginated_results(base_url, headers, per_page=100):
 
     while True:
         url = f"{base_url}?per_page={per_page}&page={page}"
-        print(url)
         response, _ = rate_limit_get(url, headers=headers)
 
         if response.status_code != 200:

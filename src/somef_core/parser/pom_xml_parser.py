@@ -40,6 +40,7 @@ def parse_pom_file(file_path, metadata_result: Result, source):
         data = lxml.etree.parse(file)
         
         root = data.getroot()
+
         if root.tag != "{" + POM_NAMESPACE + "}project":
             logging.warning(f"Expected root tag 'project' in {POM_NAMESPACE} namespace, got {root.tag} instead")
             return metadata_result
@@ -59,7 +60,9 @@ def parse_pom_file(file_path, metadata_result: Result, source):
             "dependencies": [],
             "developers": [],
             "issue_tracker": None,
-            "scm_url": None
+            "scm_url": None,
+            "homepage": [],
+            "runtime_platform": []
         }
 
         for key, node in parse_node(root):
@@ -81,9 +84,17 @@ def parse_pom_file(file_path, metadata_result: Result, source):
                 project_data["scm_url"] = parse_scm(node)        
             elif key == "developers":
                 project_data["developers"] = parse_developers(node)              
+            # elif key == "dependencies" or key == "dependencyManagement":
+            #     project_data["dependencies"] = parse_dependencies(node)
             elif key == "dependencies":
-                project_data["dependencies"] = parse_dependencies(node)
-        
+                project_data["dependencies"].extend(parse_dependencies(node))
+            elif key == "dependencyManagement":
+                for k, n in parse_node(node):
+                    if k == "dependencies":
+                        project_data["dependencies"].extend(parse_dependencies(n))
+            elif key == "properties":
+                project_data["runtime_platform"] = parse_runtime_platform(node)
+
         if group_id or artifact_id:
             identifier_value = f"{group_id or ''}.{artifact_id or ''}".strip(':')
             metadata_result.add_result(
@@ -120,7 +131,18 @@ def parse_pom_file(file_path, metadata_result: Result, source):
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
                 source
             )
-    
+     
+        if project_data["homepage"]:
+            metadata_result.add_result(
+                constants.CAT_HOMEPAGE,
+                {
+                    "value": project_data["homepage"], 
+                    "type": constants.URL},
+                1,
+                constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                source
+            )
+
         if project_data["scm_url"]:
             metadata_result.add_result(
                 constants.CAT_PACKAGE_DISTRIBUTION,
@@ -132,7 +154,7 @@ def parse_pom_file(file_path, metadata_result: Result, source):
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
                 source
             )
-
+ 
         if project_data["dependencies"]:
             for dependency in project_data["dependencies"]:
                 metadata_result.add_result(
@@ -148,29 +170,60 @@ def parse_pom_file(file_path, metadata_result: Result, source):
                     source
                 )
         
-        if project_data["developers"]	:
-            metadata_result.add_result( 
-                constants.CAT_AUTHORS ,
-                {
-                    "value": project_data["developers"],
-                    "type": constants.URL
-                },
-                1,
-                constants.TECHNIQUE_CODE_CONFIG_PARSER,
-                source
-            )
+
+        if project_data["developers"]:
+            for author in project_data["developers"]:
+  
+                if "type" not in author:
+                    author["type"] = constants.AGENT
+                    
+                metadata_result.add_result(
+                    constants.CAT_AUTHORS,
+                    author,
+                    1,
+                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                    source
+                )
 
         if repositories:
-            metadata_result.add_result(
-                constants.CAT_PACKAGE_DISTRIBUTION,
-                {
-                    "value": repositories,
-                    "type": constants.URL
-                },
-                1,
-                constants.TECHNIQUE_CODE_CONFIG_PARSER,
-                source
-            )
+
+            for rep in repositories:
+                rep["type"] = constants.URL
+
+                metadata_result.add_result(
+                    constants.CAT_PACKAGE_DISTRIBUTION,
+                    rep,
+                    1,
+                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                    source
+                )
+
+                #     constants.CAT_PACKAGE_DISTRIBUTION,
+                #     {
+                #         # "value": repositories,
+                #         rep,
+                #         "type": constants.URL
+                #     },
+                #     1,
+                #     constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                #     source
+                # )
+          
+        if project_data["runtime_platform"]:
+  
+            for runtime in project_data["runtime_platform"]:
+                metadata_result.add_result(
+                    constants.CAT_RUNTIME_PLATFORM,
+                    {
+                        "value": runtime["value"],
+                        "version": runtime["version"],
+                        "name": runtime["name"],
+                        "type": constants.STRING
+                    },
+                    1,
+                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                    source
+                )
 
         metadata = {}
         for k, v in project_data.items():
@@ -180,7 +233,8 @@ def parse_pom_file(file_path, metadata_result: Result, source):
         metadata_result.add_result(
             constants.CAT_HAS_PACKAGE_FILE,
             {
-                "value": "pom.xml",
+                # "value": "pom.xml",
+                "value": source,
                 "type": constants.URL
             },
             1,
@@ -189,7 +243,6 @@ def parse_pom_file(file_path, metadata_result: Result, source):
         )
         
         processed_pom = True
-
     return metadata_result
 
 def parse_licenses(licenses_node):
@@ -204,16 +257,27 @@ def parse_licenses(licenses_node):
                 licenses.append(license_data)
     return licenses
 
-def parse_dependencies(dependencies_node):
+def parse_dependencies(node):
     dependencies = []
-    for key, node in parse_node(dependencies_node):
-        if key == "dependency":
+
+    for child in node:
+        if not isinstance(child.tag, str):
+            continue
+
+        tag = child.tag.split("}")[-1] 
+        if tag == "dependencies":
+            dependencies.extend(parse_dependencies(child))
+        elif tag == "dependency":
             dep_data = {}
-            for key2, node2 in parse_node(node):
-                if key2 in ["groupId", "artifactId", "version"] and node2.text:
-                    dep_data[key2] = node2.text
+            for sub in child:
+                if not isinstance(sub.tag, str):
+                    continue 
+                sub_tag = sub.tag.split("}")[-1]
+                if sub_tag in ["groupId", "artifactId", "version"] and sub.text:
+                    dep_data[sub_tag] = sub.text.strip()
             if dep_data:
                 dependencies.append(dep_data)
+
     return dependencies
 
 def parse_developers(developers_node):
@@ -222,10 +286,10 @@ def parse_developers(developers_node):
         if key == "developer":
             dev_data = {}
             author_data = {
-                "name": None,
-                "email": None,
-                "url": None,
-                "organization": None,
+                # "name": None,
+                # "email": None,
+                # "url": None,
+                # "affiliation": None,
                 "type": constants.AGENT
             }
             for key2, node2 in parse_node(node):
@@ -237,10 +301,10 @@ def parse_developers(developers_node):
                 elif key2 == "url" and node2.text:
                     author_data["url"] = node2.text
                 elif key2 == "organization" and node2.text:
-                    author_data["organization"] = node2.text
+                    author_data["affiliation"] = node2.text
 
-            if not author_data["value"]:
-                author_data["value"] = author_data["email"] or author_data["organization"]
+            if "value" not in author_data:
+                author_data["value"] = author_data["email"] or author_data["affiliation"]
             dev_data.update({k: v for k, v in author_data.items() if k != "type"})
             developers.append(dev_data)
     return developers
@@ -264,7 +328,65 @@ def parse_repositories(repo_node):
             repo_data = {}
             for key2, node2 in parse_node(node):
                 if key2 in ["id", "name", "url"] and node2.text:
-                    repo_data[key2] = node2.text
+                    if key2 == "id":
+                        repo_data["value"] = node2.text
+                    else:
+                        repo_data[key2] = node2.text
             if repo_data:
                 repos.append(repo_data)
     return repos
+
+def parse_runtime_platform(properties_node):
+    """
+    Extracts runtime platform information from a <properties> node in a pom.xml.
+    Returns a list of dictionaries with runtime names and versions, or an empty list if none are found.
+
+    Parameters
+    ----------
+    properties_node : lxml.etree.Element
+        The <properties> node from the POM file.
+
+    Returns
+    -------
+    list of dict
+        Each dict has the keys 'name' and 'version', e.g. [{'name': 'Java', 'version': '1.8'}, {'name': 'Python', 'version': '3.11'}].
+        Returns an empty list if no runtime information is present.
+    """
+    runtimes = []
+
+    if properties_node is None:
+        return runtimes
+
+    for child in properties_node:
+        if not isinstance(child.tag, str):
+            continue
+        tag = child.tag.split("}")[-1].lower()
+        text = (child.text or "").strip()
+
+        if not text:
+            continue
+        # if tag.startswith(f"{{{POM_NAMESPACE}}}") and tag.endswith(".version") and child.text:
+        #     print('entramos')
+        #     runtime_name = tag.split("}")[-1].split(".")[0].capitalize()
+        #     version_value = child.text.strip()
+        #     runtimes.append({"value": f'{runtime_name} {version_value}',"name": runtime_name, "version": version_value})
+        if any(x in tag for x in ["java.version", "javaversion", "java_version"]):
+            runtimes.append({
+                "name": "Java",
+                "version": text,
+                "value": f"Java: {text}"
+            })
+        elif any(x in tag for x in ["kotlin.version", "kotlinversion", "kotlin_version"]):
+            runtimes.append({
+                "name": "Kotlin",
+                "version": text,
+                "value": f"Kotlin: {text}"
+            })
+        elif any(x in tag for x in ["scala.version", "scalaversion", "scala_version"]):
+            runtimes.append({
+                "name": "Scala",
+                "version": text,
+                "value": f"Scala: {text}"
+            })
+    
+    return runtimes

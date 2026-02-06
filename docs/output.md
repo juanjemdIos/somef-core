@@ -1,9 +1,9 @@
-SOMEF-core supports three main output formats. Each of them contains different information with different levels of granularity. Below we enumerate them from more granular to less granular:
+SOMEF supports three main output formats. Each of them contains different information with different levels of granularity. Below we enumerate them from more granular to less granular:
 
 ## JSON format
 **Version:** 1.0.1
 
-Default SOMEF-core response (and more complete in terms of metadata). The JSON format returns a set of categories, as shown in the snippet below:
+Default SOMEF response (and more complete in terms of metadata). The JSON format returns a set of categories, as shown in the snippet below:
 
 ```json
 {
@@ -66,6 +66,7 @@ The `confidence` depends on the `technique` used. In this case, the confidence i
 SOMEF aims to recognize the following categories (in alphabetical order):
 
 - `acknowledgement`: Any text that the authors have prepared to acknnowledge the contribution from others, or project funding.
+- `application_domain`: The application domain of the repository. This may be related to the research area of a software component (e.g., Astrophysics) or the general domain/functionality of the tool (i.e., machine learning projects). See all current recognized application domains [here](https://somef.readthedocs.io/en/latest/#myfootnote1).
 - `authors`: Person or organization responsible of the project. This property is also used to indicate the responsible entities of a publication associated with the code repository.
 - `citation`: Software citation (usually in `.bib` form) as the authors have stated in their readme file, or through a `CFF` file.
 - `code_of_conduct`: Link to the code of conduct file of the project
@@ -77,6 +78,7 @@ SOMEF aims to recognize the following categories (in alphabetical order):
 - `date_created`: Date when the software component was created.
 - `date_updated`: Date when the software component was last updated (note that this will always be older than the date of the extraction).
 - `description`: A description of what the software component does.
+- `development_status`: The project’s development stage: beta, deprecated...
 - `documentation`: Where to find additional documentation about a software component.
 - `download_url`: URL where to download the target software (typically the installer, package or a tarball to a stable version)
 - `executable_example`: Jupyter notebooks ready for execution (e.g., through myBinder, colab or files)
@@ -87,6 +89,7 @@ SOMEF aims to recognize the following categories (in alphabetical order):
 - `full_title`: If the repository has a short name, we will attempt to extract the longer version of the repository name. For example, a repository may be called "Widoco", but the longer title is "Wizard for documenting ontologies".
 - `has_build_file`: Build file to create a Docker image for the target software 
 - `has_script_file`: Snippets of code contained in the repository.
+- `homepage`: URL of the item.
 - `identifier`: Identifiers detected within a repository (e.g., Digital Object Identifier).
 - `images`: Images used to illustrate the software component.
 - `installation`: A set of instructions that indicate how to install a target repository
@@ -96,6 +99,7 @@ SOMEF aims to recognize the following categories (in alphabetical order):
 - `license`: License and usage terms of a software component
 - `logo`: Main logo used to represent the target software component.
 - `name`: Name identifying a software component
+- `ontologies`: URL and path to the ontology files present in the repository.
 - `owner`: Name of the user or organization in charge of the repository
 - `package_distribution`: Link to official package repositories where the software can be downloaded from (e.g., `pypi`).
 - `package_file`: Link to a package file used in the repository (e.g., `pyproject.toml`, `setup.py`).
@@ -112,6 +116,11 @@ SOMEF aims to recognize the following categories (in alphabetical order):
 - `type`: Software type: Commandline Application, Notebook Application, Ontology, Scientific Workflow. Non-Software types: Static Website, Uncategorized
 - `usage`: Usage examples and considerations of a code repository.
 - `workflows`: URL and path to the computational workflow files present in the repository.
+- `homepage`: URL to the homepage of the software or organization.
+- `reference_publication`: URL to the paper associated with the code repository.
+- `package_id`: Identifier extracted from packages. (e.g., `packages.json`)
+-  `funding`: Funding code for the related project.
+- `has_package_file`: Specifies what package file is present in the code repository.
 
 The following table summarized the properties used to describe a `category`:
 
@@ -162,7 +171,7 @@ The following object `types` are currently supported:
 - `Agent`: user (typically, a person) or organization responsible for authoring a software release or a paper.
 - `Publication`: Scientific paper associated with the code repository.
 - `SoftwareApplication`: Class to represent software dependencies between projects.
-
+- `Runtime_platform`: specifies runtime platform or script interpreter dependencies required to run the project..
 The following literal types are currently supported:
 
 - `Number`: A numerical value. We do not distinguish between integer, long or float.
@@ -172,6 +181,8 @@ The following literal types are currently supported:
   - `File_dump`: The  value is a string with the contents of a file (e.g., a `citation.cff` file, or a `license.md` file).
 - `Url`: uniform resource locator of a file.
 
+
+<!-- |
 The table below summarizes all types and their corresponding properties:
 
 | Property | Describes | Expected value | Definition |
@@ -194,8 +205,129 @@ The table below summarizes all types and their corresponding properties:
 | **tag** | Release | String | named version of a release |
 | **tarball_url** | Release | Url | URL to the tar ball file where to download a software release |
 | **title** | Publication | String | Title of the publication |
-| **url** | Release, Publication, License, Agent | Url | Uniform resource locator of the resource |
-| **zipball_url** | Release | Url | URL to the zip file where to download a software release |
+ **url** | Release, Publication, License, Agent | Url | Uniform resource locator of the resource |
+| **zipball_url** | Release | Url | URL to the zip file where to download a software release | -->
+
+
+The tables below summarizes all types and their corresponding properties-
+
+An AGENT has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **email** | String | Email of an author |
+| **family_name** | String | Last name of an author |
+| **given_name** | String | First name of an author |
+| **name** | String | Name used to designate the person or organization|
+| **url** | Url | Uniform resource locator of the resource |
+| **affiliation** | String | name of organization or affiliation  |
+| **identifier** | String | id of an agent  |
+| **role** | String | role of agent  |
+
+An ASSET has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **content_size** | Integer | size of file |
+| **content_url** | String | direct download link for the release file |
+| **download_count** | Integer | numbers of downloads |
+| **encoding_format** | String | format of the file |
+| **name** | String | Title or name of the file |
+| **upload_date** | Date | Date of creation of a release |
+| **url** |  Url | Uniform resource locator of the resource |
+
+
+
+A LICENSE has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **name** | String | Title or name of the license |
+| **spdx_id** | String | Spdx id corresponding to this license |
+| **url** |  Url | Uniform resource locator of the license |
+| **identifier** |  String | id of licence |
+
+A PROGRAMMING_LANGUAGE has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **name** | String | Name of the language |
+| **size** | Integer | File size content (bytes) of a code repository using a given programming language |
+
+
+A PUBLICATION has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **author** | Agent,  Organization | Person or organization responsible for creating an article or a software release. |
+| **doi** | Url | When a publication is detected, but the format is in bibtek or CFF, SOMEF will add a `doi`  field with the detected DOI value. The result includes a full URL. |
+| **title** | String | Title of the publication |
+| **url** | Url | Uniform resource locator of the resource |
+
+
+A RELEASE has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **assets** |  Asset  | Files attached to the release
+| **author** | Agent,  Organization | Person or organization responsible for creating an article or a software release. |
+| **description** | String | Descriptive text with the purpose of the release |
+| **date_created** | Date | Date of creation of a release |
+| **date_published** | Date | Date of publication of a release |
+| **html_url** | Url | link to the HTML representation of a release |
+| **name** | String | Title or name used to designate the release, license user or programming language. |
+| **release_id** | String | Id of a software release. |
+| **tag** | String | named version of a release |
+| **tarball_url** | Url | URL to the tar ball file where to download a software release |
+| **url** | Url | Uniform resource locator of the resource |
+| **zipball_url** | Url | URL to the zip file where to download a software release |
+
+
+<!-- A REQUIREMENTS has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **name** | String | Name of the requeriment |
+| **version** | String | named version of a requeriment |
+| **dependency_type** | String | type: dev, runtime... | -->
+
+
+A RUNTIME_PLATFORM has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **name** | String | Name of the runtime platform (e.g., Java) |
+  **version** | String | version of the runtime platform |
+| **value** | String | name and version of the runtime platform |
+
+
+A SCHOLARLY_ARTICLE has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **title** | String | Title of reference or citation |
+| **value** | String | Title of reference or citation |
+| **url** | String | Link to reference or citation |
+| **date_published** | String | date of publication reference or citation |
+| **doi** | String | Identifier of reference|
+
+
+A SOFTWARE_APPLICATION has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **name** | String | Name of the software |
+| **value** | String | Name and version of the software |
+| **version** | String | version of software |
+| **development_type** | String | runtime or dev |
+
+A TEXT_EXCERPT has the following properties:
+
+| Property | Expected value | Definition |
+|---|---|---|
+| **original_header** | String | If the result value is extracted from a markdown file like a README, the original header of that section is also returned. |
+| **parent_header** | [String] | If the result value is extracted from a markdown file like a README, the parent header(s) of the current section are also returned (in case they exist). |
+
 
 
 ### Format
@@ -208,10 +340,16 @@ The following formats for a result value are currently recognized:
 - `docker_compose`: [orchestration file](https://docs.docker.com/compose/compose-file/) used to communicate multiple containers.
 - `readthedocs`: documentation format used by many repositories in order to describe their projects.
 - `wiki`: documentation format used in GitHub repositories.
-- `setup.py`: package file format used in python projects
-- `pyproject.toml`: package file format used in python projects
-- `pom.xml`: package file used in Java projects
-- `package.json`: package file used in Javascript projects
+- `setup.py`: package file format used in python projects.
+- `publiccode.yml`: metadata file used to describe public sector software projects.
+- `pyproject.toml`: package file format used in python projects.
+- `pom.xml`: package file used in Java projects.
+- `package.json`: package file used in Javascript projects.
+- `bower.json`: package descriptor used for configuring packages that can be used as a dependency for Bower-managed front-end projects.
+- `composer.json`: manifest file serves as the package descriptor used in PHP projects.
+- `cargo.toml.json`: manifest file serves as the package descriptor used in Rust projects.
+- `[name].gemspec`:manifest file serves as the package descriptor used in Ruby gem projects.
+
 
 ### Technique
 The techniques can be of several types: 

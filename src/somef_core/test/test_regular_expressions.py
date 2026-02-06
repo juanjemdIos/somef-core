@@ -48,7 +48,7 @@ class TestRegExp(unittest.TestCase):
         with open(test_data_path + "test_extract_dois.txt", "r") as data_file:
             test_text = data_file.read()
             c = regular_expressions.extract_doi_badges(test_text, Result(), test_data_path + "test_extract_dois.txt")
-            assert len(c.results[constants.CAT_IDENTIFIER]) == 2
+            assert len(c.results[constants.CAT_IDENTIFIER]) == 3
 
     def test_extract_binder_links(self):
         """Test designed to check if binder links are detected"""
@@ -84,6 +84,17 @@ class TestRegExp(unittest.TestCase):
                                                   test_data_path + "test_extract_title_with_md.txt")
             res = c.results[constants.CAT_FULL_TITLE][0]
             assert "SOMEF" == res[constants.PROP_RESULT][constants.PROP_VALUE]
+
+    def test_extract_title_ignored_header(self):
+        """Test that a header like 'Overview' and headers are not returned as full title"""
+
+        with open(test_data_path + "README-EUVpy.md", "r") as data_file:
+            test_text = data_file.read()
+            c = regular_expressions.extract_title(test_text, Result(),
+                                                  test_data_path + "README-EUVpy.md")
+  
+            assert constants.CAT_FULL_TITLE not in c.results or len(c.results[constants.CAT_FULL_TITLE]) == 0
+
 
     def test_extract_readthedocs_1(self):
         """Test designed to check if readthedocs links are detected"""
@@ -195,7 +206,6 @@ class TestRegExp(unittest.TestCase):
             results = regular_expressions.extract_images(test_text, repo_url, None, Result(),
                                                          test_data_path + "test_issue_images.txt", "main")
             img = results.results[constants.CAT_IMAGE]
-            print(img)
             assert len(img) == 2
 
     #Test commented out because arxiv links with no context has demonstrated not to be useful
@@ -213,7 +223,7 @@ class TestRegExp(unittest.TestCase):
             result = regular_expressions.extract_arxiv_links(test_text, Result(), test_data_path + "test_issue_181_2.txt")
             arxiv_url = result.results[constants.CAT_RELATED_PAPERS][0]['result']['value']
             expected_result = "https://arxiv.org/abs/2203.01044"
-            self.assertEquals(expected_result,arxiv_url)
+            self.assertEqual(expected_result,arxiv_url)
     def test_issue_181_3(self):
         """Test to test arxiv as embedded url, including same in bibtex"""
         with open(test_data_path + "test_issue_181_3.txt", "r") as data_file:
@@ -222,7 +232,7 @@ class TestRegExp(unittest.TestCase):
                                                              test_data_path + "test_issue_181_3.txt")
             arxiv_url = result.results[constants.CAT_RELATED_PAPERS][0]['result']['value']
             expected_result = "https://arxiv.org/abs/1907.11111"
-            self.assertEquals(expected_result, arxiv_url)
+            self.assertEqual(expected_result, arxiv_url)
 
     def test_issue_270(self):
         """Test designed to check if support channels are detected"""
@@ -388,3 +398,108 @@ The web UI works in recent desktop versions of Chrome, Firefox, Safari and Inter
                                                   test_data_path + "README-ci-sample-project.md")
 
             assert constants.CAT_FULL_TITLE not in c.results, "Category CAT_FULL_TITLE should be absent if there is no valid title."
+
+    def test_issue_771(self):
+        """Test designed to check whether identifiers, package manager and documentation can be extracted
+        from badges in the readme file """
+        with open(test_data_path + "README-sunpy.rst", "r") as data_file:
+            test_text = data_file.read()
+            identifiers = regular_expressions.extract_doi_badges(test_text, Result(),
+                                                  test_data_path + "README-sunpy.rst")
+            documentation = regular_expressions.extract_readthedocs_badgeds(test_text, Result(),
+                                                  test_data_path + "README-sunpy.rst")
+            package = regular_expressions.extract_package_distributions(test_text, Result(),
+                                                  test_data_path + "README-sunpy.rst")
+
+            # cant provide concrete doi or test will fail every time there is an update and we resolve the id
+            expected_doi = "https://doi.org/10.5281/zenodo."
+            doi_values = []
+            if "identifier" in identifiers.results:
+                for result in identifiers.results["identifier"]:
+                    if "result" in result and "value" in result["result"]:
+                        doi_values.append(result["result"]["value"])
+                assert expected_doi in doi_values[0], f"Expected DOI {expected_doi} not found in identifiers"
+                
+            expected_doc_url = "https://docs.sunpy.org/"
+            documentation_values = []
+            if "documentation" in documentation.results:
+                for result in documentation.results["documentation"]:
+                    if "result" in result and "value" in result["result"]:
+                        documentation_values.append(result["result"]["value"])
+
+                assert expected_doc_url in documentation_values, f"Expected url documentation {expected_doc_url} not found in documentation"
+
+            expected_packages = {
+                "https://pypi.org/project/sunpy/",
+                "https://anaconda.org/conda-forge/sunpy"
+            }
+
+            package_distribution_values = []
+            if "package_distribution" in package.results:
+                for result in package.results["package_distribution"]:
+                    if "result" in result and "value" in result["result"]:
+                        package_distribution_values.append(result["result"]["value"])
+
+                for expected in expected_packages:
+                    assert expected in package_distribution_values, f"Package distribution {expected} not found in {package_distribution_values}"
+
+    def test_issue_860(self):
+        """Test designed to check redthedocs links are extracted correctly when multiple links are present """
+        documentation_values = []
+        package_values = []
+
+        for readme_file in ["README-menty.md", "README-uncbiag.md"]:
+            with open(test_data_path + readme_file, "r") as data_file:
+                readme_text = data_file.read()
+                documentation = regular_expressions.extract_readthedocs_badgeds(
+                    readme_text, Result(), test_data_path + readme_file
+                )
+                if "documentation" in documentation.results:
+                    for result in documentation.results["documentation"]:
+                        if "result" in result and "value" in result["result"]:
+                            # Solo agregamos strings
+                            value = result["result"]["value"]
+                            if isinstance(value, str):
+                                documentation_values.append(value)
+
+                if "package_distribution" in documentation.results:
+                    for result in documentation.results["package_distribution"]:
+                        value = result.get("result", {}).get("value")
+                        if isinstance(value, str):
+                            package_values.append(value)
+
+        expected_doc_urls = { 
+            "https://docs.mentpy.com/en/latest/?badge=latest", 
+            "https://icon.readthedocs.io/en/master/" 
+        }
+
+        expected_package_urls = {
+                "https://pypi.org/project/mentpy"
+        }
+
+        assert expected_doc_urls.issubset(set(documentation_values)), (
+            f"Expected documentation URLs {expected_doc_urls} not found in {documentation_values}"
+        )
+        assert expected_package_urls.issubset(set(package_values)), (
+        f"Pypy package {expected_package_urls} not foun in package_distribution: {package_values}"
+    )
+
+    def test_readme_rst_readthedocs(self):
+        """Test designed to check whether rst readmes get stuck in extracting documentation """
+ 
+        with open(test_data_path + "README-sunpy.rst", "r") as data_file:
+            test_text = data_file.read()
+
+            documentation = regular_expressions.extract_readthedocs_badgeds(test_text, Result(),
+                                                  test_data_path + "README-sunpy.rst")
+
+                
+            expected_doc_url = "https://docs.sunpy.org/"
+            documentation_values = []
+            if "documentation" in documentation.results:
+                for result in documentation.results["documentation"]:
+                    if "result" in result and "value" in result["result"]:
+                        documentation_values.append(result["result"]["value"])
+
+                assert expected_doc_url in documentation_values, f"Expected url documentation {expected_doc_url} not found in documentation"
+
