@@ -5,7 +5,6 @@
 
 <img src="docs/logo.png" alt="logo" width="150"/>
 
-borrar después 7
 A command line interface for automatically extracting relevant metadata from code repositories (readme, configuration files, documentation, etc.).
 
 This repository is extracted from https://github.com/SciCodes/somef-core/
@@ -164,7 +163,7 @@ To test the correct installation of poetry run (poetry version `> 2.0.0`):
 poetry --version
 ```
 
-Install somef and all their dependencies.
+Install somef-core and all their dependencies.
 
 ```
 cd /somef_core
@@ -184,10 +183,10 @@ source /path_to_env/ENV_NAME/bin/activate
 
 To learn more about poetry environment management, visit their official documentation [here](https://python-poetry.org/docs/managing-environments/).
 
-Test the SOMEF installation run:
+Test the SOMEF-core installation run:
 
 ```bash
-somef --help
+somef_core --help
 ```
 
 If everything goes fine, you should see:
