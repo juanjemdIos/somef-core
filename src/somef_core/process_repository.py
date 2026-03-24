@@ -11,6 +11,7 @@ from .utils import constants
 from . import configuration
 from .process_results import Result
 from .regular_expressions import detect_license_spdx
+from .parser.codeowners_parser import enrich_user
 
 # Constructs a template HTTP header, which:
 # - has a key for the authorization token if passed via the authorization argument, otherwise
@@ -57,15 +58,12 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=const
             content_length = head_response.headers.get("Content-Length")
             if content_length is not None:
                 size_bytes = int(content_length)
-                print(f"HEAD Content-Length: {size_bytes}")
                 if size_bytes > size_limit_bytes:
                     logging.warning(
                         f"Download size {size_bytes} bytes exceeds limit of {size_limit_bytes} bytes. Skipping download."
                     )
                     return None, None
             else:
-                # logging.warning(f"Could not determine file size for {url}. Skipping download.")
-                # return None, None
                 logging.warning(f"No Content-Length header for {url}. Proceeding with download anyway (unable to estimate size).")
         except Exception as e:
             logging.warning(f"HEAD/stream request failed: {e}. Continuing with GET...")
@@ -81,6 +79,12 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=const
             stream=use_stream,
             **kwargs
         )
+        # Detect invalid or insufficient GitHub token 
+        if response.status_code == 401: 
+            raise Exception("Invalid GitHub token. Run `somef configure` to set a valid token.") 
+        if response.status_code == 403: 
+            raise Exception("GitHub token lacks required permissions or scopes.")
+        
         date = response.headers.get("Date", "")
         # Show rate limit information if available
         if "X-RateLimit-Remaining" in response.headers:
@@ -167,14 +171,41 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
 
     path_components = url.path.split('/')
 
-    if len(path_components) < 3:
-        logging.error("Gitlab link is not correct.")
+    # if len(path_components) < 3:
+    #     logging.error("Gitlab link is not correct.")
+    #     return " ", {}
+
+    # owner = path_components[1]
+    # repo_name = path_components[2]
+    # if len(path_components) == 4:
+    #     repo_name = repo_name + '/' + path_components[3]
+
+    # new code to support complex gitlab urls. Before this we just accepted urls in the format https://gitlab.com/{owner}/{repo_name} 
+    # clean path components 
+    path_components = [p for p in url.path.split('/') if p]
+
+    # GitLab requires at least owner + repo
+    if len(path_components) < 2:
+        logging.error("GitLab link is not correct. Expected https://gitlab.com/<owner>/<repo>")
         return " ", {}
 
-    owner = path_components[1]
-    repo_name = path_components[2]
-    if len(path_components) == 4:
-        repo_name = repo_name + '/' + path_components[3]
+    # the owner is alwyas the first
+    owner = path_components[0]
+
+    # and repo name is the last
+    routing_markers = {"-", "tree", "blob", "issues", "merge_requests"}
+
+    # If the last component is a routing marker, the repo is the previous one
+    if path_components[-1] in routing_markers:
+        repo_name = path_components[-2]
+    else:
+        repo_name = path_components[-1]
+
+    default_branch = None
+    if "tree" in path_components:
+        idx = path_components.index("tree")
+        if idx + 1 < len(path_components):
+            default_branch = "/".join(path_components[idx+1:])
 
     # could be gitlab.com or some gitlab self-hosted GitLab servers like gitlab.in2p3.fr
     if repository_url.rfind("gitlab.com") > 0:
@@ -251,20 +282,6 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
 
         repo_metadata.add_result(constants.CAT_RELEASES, release_obj, 1, constants.TECHNIQUE_GITLAB_API)
 
-
-    default_branch = None
-
-    if len(path_components) >= 5:
-        if not path_components[4] == "tree":
-            logging.error(
-                "GitLab link is not correct. \nThe correct format is https://gitlab.com/{owner}/{repo_name}.")
-
-            return " ", {}
-
-        # we must join all after 4, as sometimes tags have "/" in them.
-        default_branch = "/".join(path_components[5:])
-        ref_param = {"ref": default_branch}
-
     if 'defaultBranch' in project_details.keys():
         general_resp = {'defaultBranch': project_details['defaultBranch']}
     elif 'default_branch' in project_details.keys():
@@ -285,17 +302,19 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
     if default_branch is None:
         default_branch = general_resp['defaultBranch']
 
-    repo_metadata.add_result(constants.CAT_CODE_REPOSITORY,
-                             {constants.PROP_VALUE: f"https://{url.netloc}/{owner}/{repo_name}/",
-                              constants.PROP_TYPE: constants.URL
-                              }, 1, constants.TECHNIQUE_GITLAB_API)
+    project_path = "/".join(path_components)
 
-    # filtered_resp = do_crosswalk(general_resp, github_crosswalk_table)
-    # filtered_resp = {"downloadUrl": f"https://gitlab.com/{owner}/{repo_name}/-/branches"}
+    #                          {constants.PROP_VALUE: f"https://{url.netloc}/{owner}/{repo_name}/",
+    repo_metadata.add_result(constants.CAT_CODE_REPOSITORY,
+                            {constants.PROP_VALUE: f"https://{url.netloc}/{project_path}/",
+                            constants.PROP_TYPE: constants.URL
+                            }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    #                          {constants.PROP_VALUE: f"https://{url.netloc}/{owner}/{repo_name}/-/branches",
     repo_metadata.add_result(constants.CAT_DOWNLOAD_URL,
-                             {constants.PROP_VALUE: f"https://{url.netloc}/{owner}/{repo_name}/-/branches",
-                              constants.PROP_TYPE: constants.URL
-                             }, 1, constants.TECHNIQUE_GITLAB_API)
+                            {constants.PROP_VALUE: f"https://{url.netloc}/{project_path}/-/branches",
+                            constants.PROP_TYPE: constants.URL
+                            }, 1, constants.TECHNIQUE_GITLAB_API)
 
     # condense license information
     license_result = {constants.PROP_TYPE: constants.URL}
@@ -326,11 +345,6 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
     if constants.PROP_VALUE in license_result:
         repo_metadata.add_result(constants.CAT_LICENSE, license_result, 1, constants.TECHNIQUE_GITLAB_API)
 
-    # get keywords / topics
-    # topics_headers = header
-    # topics_headers['accept'] = 'application/vnd.github.mercy-preview+json'
-    # topics_resp, date = rate_limit_get(repo_api_base_url + "/topics",
-    #                                   headers=topics_headers)
     topics_resp = {}
 
     keywords = []
@@ -384,7 +398,9 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
         }, 1, constants.TECHNIQUE_GITLAB_API)
 
     logging.info("Repository information successfully loaded. \n")
-    return repo_metadata, owner, repo_name, default_branch
+    # return repo_metadata, owner, repo_name, default_branch
+    return repo_metadata, owner, repo_name, default_branch, project_path
+
 
 
 def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
@@ -405,9 +421,15 @@ def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
     url = urlparse(repo_ref)
     path_components = url.path.split('/')
 
-    repo_archive_url = f"https://{url.netloc}/{owner}/{repo_name}/-/archive/{repo_branch}/{repo_name}-{repo_branch}.zip"
-    if len(path_components) == 4:
-            repo_archive_url = f"https://{url.netloc}/{owner}/{repo_name}/-/archive/{repo_branch}/{path_components[3]}.zip"
+    path_components = [p for p in path_components if p]
+    project_path = "/".join(path_components)
+
+    # repo_archive_url = f"https://{url.netloc}/{owner}/{repo_name}/-/archive/{repo_branch}/{repo_name}-{repo_branch}.zip"
+    # if len(path_components) == 4:
+    #         repo_archive_url = f"https://{url.netloc}/{owner}/{repo_name}/-/archive/{repo_branch}/{path_components[3]}.zip"
+    repo_archive_url = (
+        f"https://{url.netloc}/{project_path}/-/archive/{repo_branch}/{repo_name}-{repo_branch}.zip"
+    )
 
     logging.info(f"Downloading {repo_archive_url}")
     repo_download = requests.get(repo_archive_url)
@@ -431,8 +453,8 @@ def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
         return None
 
 
-def download_readme(owner, repo_name, default_branch, repo_type, authorization):
-    """
+def download_readme(owner, repo_name, default_branch, repo_type, authorization, project_path = None):
+    """ss
     Method that given a repository owner, name and default branch, it downloads the readme content only.
     The readme is assumed to be README.md
     Parameters
@@ -447,8 +469,9 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization):
     @return: text with the contents of the readme file
     """
     if repo_type is constants.RepositoryType.GITLAB:
-        primary_url = f"https://gitlab.com/{owner}/{repo_name}/-/raw/{default_branch}/README.md"
-        secondary_url = f"https://gitlab.com/{owner}/{repo_name}/-/raw/master/README.md"
+        base = f"https://gitlab.com/{project_path}" if project_path else f"https://gitlab.com/{owner}/{repo_name}"
+        primary_url = f"{base}/-/raw/{default_branch}/README.md"
+        secondary_url = f"{base}/-/raw/master/README.md"
     elif repo_type is constants.RepositoryType.GITHUB:
         primary_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/README.md"
         secondary_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/master/README.md"
@@ -478,7 +501,8 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization):
 
 
 def load_online_repository_metadata(repository_metadata: Result, repository_url, ignore_api_metadata=False,
-                                    repo_type=constants.RepositoryType.GITHUB, authorization=None):
+                                    repo_type=constants.RepositoryType.GITHUB, authorization=None, reconcile_authors=False,
+                                    branch=None,tag=None):
     """
     Function uses the repository_url provided to load required information from GitHub or Gitlab.
     Information kept from the repository is written in keep_keys.
@@ -489,6 +513,9 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
     @param ignore_api_metadata: true if you do not want to do an additional request to the target API
     @param repository_url: target repository URL.
     @param authorization: GitHub authorization token
+    @param reconcile_authors: flag to indicate if additional should be extracted from certain files as codeowners. More request.
+    @param branch: branch of the repository to analyze. Overrides the default branch detected from the repository metadata.
+    @param tag: tag of the repository to analyze. Cannot be used together with the branch parameter.
 
     Returns
     -------
@@ -563,6 +590,11 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
     elif default_branch is None:
         default_branch = general_resp['default_branch']
 
+    if branch:
+        default_branch = branch
+    if tag:
+        default_branch = tag
+
     # filter the general response with only the fields we are interested in, mapping them to our keys
     filtered_resp = {}
     if not ignore_api_metadata:
@@ -572,10 +604,22 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
 
     for category, value in filtered_resp.items():
         value_type = constants.STRING
+        maintainer_data = {}
         if category in constants.all_categories:
             if category == constants.CAT_ISSUE_TRACKER:
                 value = value.replace("{/number}", "")
             if category == constants.CAT_OWNER:
+                if reconcile_authors:
+                    logging.info("Enriching owner information from codeowners...")
+                    user_info = enrich_user(owner,repo_type)
+                    if user_info:
+                        if user_info.get(constants.PROP_CODEOWNERS_NAME):
+                            maintainer_data[constants.PROP_NAME] = user_info.get(constants.PROP_CODEOWNERS_NAME)
+                        if user_info.get(constants.PROP_CODEOWNERS_COMPANY):
+                            maintainer_data[constants.PROP_AFFILIATION] = user_info.get(constants.PROP_CODEOWNERS_COMPANY)
+                        if user_info.get(constants.PROP_CODEOWNERS_EMAIL):
+                            maintainer_data[constants.PROP_EMAIL] = user_info.get(constants.PROP_CODEOWNERS_EMAIL)
+
                 value_type = filtered_resp[constants.AGENT_TYPE]
             if category == constants.CAT_KEYWORDS:
                 # we concatenate all keywords in a list, as the return value is always a single object
@@ -597,6 +641,17 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
                 }
                 if "spdx_id" in value.keys():
                     result[constants.PROP_SPDX_ID] = value["spdx_id"]
+            elif category == constants.CAT_OWNER:
+                result = {
+                    constants.PROP_VALUE: value,
+                    constants.PROP_TYPE: value_type
+                }
+                if maintainer_data.get("name"):
+                    result[constants.PROP_NAME] = maintainer_data["name"]
+                if maintainer_data.get("affiliation"):
+                    result[constants.PROP_AFFILIATION] = maintainer_data["affiliation"]
+                if maintainer_data.get("email"):
+                    result[constants.PROP_EMAIL] = maintainer_data["email"]
             else:
                 result = {
                     constants.PROP_VALUE: value,
@@ -609,7 +664,12 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
     if not ignore_api_metadata:
         languages_raw, date = rate_limit_get(filtered_resp['languages_url'], headers=header)
         
-        languages = languages_raw.json()
+        if languages_raw is None:
+            logging.warning("Skipping languages: rate_limit_get returned None (size limit or network error)")
+            languages = {}
+        else:
+            languages = languages_raw.json()
+
         if "message" in languages:
             logging.error("Error while retrieving languages: " + languages["message"])
         else:
@@ -672,7 +732,7 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
             repository_metadata.add_result(constants.CAT_RELEASES, release_obj, 1,
                                             constants.TECHNIQUE_GITHUB_API)
     logging.info("Repository information successfully loaded.\n")
-    return repository_metadata, owner, repo_name, default_branch
+    return repository_metadata, owner, repo_name, default_branch, None
 
 
 def get_path(obj, path):
@@ -747,12 +807,29 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
     # download the repo at the selected branch with the link
     repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/{repo_ref}.zip"
     logging.info(f"Downloading {repo_archive_url}")
+ 
     repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
 
     if repo_download is None:
         logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content lenght.")
         return None
     
+    if repo_download.status_code == 300:
+        logging.warning(f"Ambiguous ref detected for {repo_ref}, trying tags/heads resolution")
+
+        for ref_type in ["tags", "heads"]:
+            repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/refs/{ref_type}/{repo_ref}.zip"
+            logging.info(f"Trying to download {repo_archive_url}")
+
+            repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
+
+            if repo_download is None:
+                    logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content length.")
+                    return None
+
+            if repo_download.status_code == 200:
+                break
+
     if repo_download.status_code == 404:
         logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
         repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/main.zip"
@@ -763,7 +840,8 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
             return None
         
     if repo_download.status_code != 200:
-        sys.exit(f"Error: Archive request failed with HTTP {repo_download.status_code}")
+        logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
+        return None
 
     repo_zip = repo_download.content
 
@@ -942,6 +1020,10 @@ def get_all_paginated_results(base_url, headers, per_page=100):
         url = f"{base_url}?per_page={per_page}&page={page}"
         response, _ = rate_limit_get(url, headers=headers)
 
+        if response is None:
+            logging.warning(f"Skipping page {page}: rate_limit_get returned None (size limit or network error)")
+            break
+        
         if response.status_code != 200:
             logging.warning(f"GitHub API error on page {page}: {response.status_code}")
             break

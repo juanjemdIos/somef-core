@@ -159,9 +159,9 @@ def parse_composer_json(file_path, metadata_result: Result, source):
                         for name, version in data[section].items():
                             req = f"{name}: {version}"
                             if section == "require-dev":
-                                dep_type = "dev"
+                                dep_type = constants.DEPENDENCY_TYPE_DEVELOPMENT
                             else:
-                                dep_type = "runtime"
+                                dep_type = constants.DEPENDENCY_TYPE_RUNTIME
                             
                             metadata_result.add_result(
                                 constants.CAT_REQUIREMENTS,
@@ -170,7 +170,8 @@ def parse_composer_json(file_path, metadata_result: Result, source):
                                     "name": name,
                                     "version": version,
                                     "type": constants.SOFTWARE_APPLICATION,
-                                    "dependency_type": dep_type
+                                    "dependency_type": dep_type,
+                                    "dependency_resolver": "composer"
                                 },
                                 1,
                                 constants.TECHNIQUE_CODE_CONFIG_PARSER,

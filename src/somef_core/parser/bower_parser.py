@@ -131,7 +131,6 @@ def parse_bower_json_file(file_path, metadata_result: Result, source):
                 if "dependencies" in data and isinstance(data["dependencies"], dict):
                     for name, version in data["dependencies"].items():
                         req = f"{name}: {version}"
-                        
                         metadata_result.add_result(
                             constants.CAT_REQUIREMENTS,
                             {
@@ -139,7 +138,8 @@ def parse_bower_json_file(file_path, metadata_result: Result, source):
                                 "name": name,
                                 "version": version,
                                 "type": constants.SOFTWARE_APPLICATION,
-                                "dependency_type": "runtime"
+                                "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
+                                "dependency_resolver": "bower"
                             },
                             1,
                             constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -157,7 +157,8 @@ def parse_bower_json_file(file_path, metadata_result: Result, source):
                                 "name": name,
                                 "version": version,
                                 "type": constants.SOFTWARE_APPLICATION,
-                                "dependency_type": "dev"
+                                "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
+                                "dependency_resolver": "bower"      
                             },
                             1,
                             constants.TECHNIQUE_CODE_CONFIG_PARSER,

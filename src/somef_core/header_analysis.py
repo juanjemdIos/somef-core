@@ -98,40 +98,11 @@ def path_similarity_cached(sense1, sense2) -> float:
     sim = sense1.path_similarity(sense2)
     return sim if sim is not None else 0.0
 
-# def extract_bash_code(text):
-#     """Function to detect code blocks"""
-#     split = text.split("```")
-#     output = []
-#     if len(split) >= 3:
-#         for index, value in enumerate(split):
-#             if index % 2 == 1:
-#                 output.append(split[index])
-#     return output
 def extract_bash_code(text: str) -> List[str]:
     blocks = text.split("```")
     return [blocks[i] for i in range(1, len(blocks), 2)]
 
-# def extract_header_content(text):
-#     """Function designed to extract headers and contents of text and place it in a dataframe"""
-#     header = []
-#     headers = mardown_parser.extract_headers(text)
-#     for key in headers.keys():
-#         if headers[key]:
-#             header.append(key)
-#     content, none_header_content = mardown_parser.extract_content_per_header(text, headers)
-#     parent_headers = mardown_parser.extract_headers_parents(text)
-#     # into dataframe
-#     df = pd.DataFrame(columns=['Header', 'Content', 'ParentHeader'])
-#     dfs = [pd.DataFrame({'Header': [i], 'Content': [j], 'ParentHeader': [parent_headers.get(i, None)]}) for i, j in
-#            zip(header, content)]
-#     df = pd.concat(dfs, ignore_index=True)
-#     # for i, j in zip(header, content):
-#     #     df = df.append({'Header': i, 'Content': j, 'ParentHeader': parent_headers[i]}, ignore_index=True)
-#     # df['Content'].replace('', np.nan, inplace=True)
-#     df['Content'] = df['Content'].replace('', np.nan)
 
-#     df.dropna(subset=['Content'], inplace=True)
-#     return df, none_header_content
 def extract_header_content(text: str) -> Tuple[pd.DataFrame, str | None]:
     headers = mardown_parser.extract_headers(text)
     header_list = [h for h, v in headers.items() if v]
@@ -172,23 +143,6 @@ def find_sim(wordlist, wd):
         return max(sim_value)
     else:
         return 0
-
-
-# def match_group(word_syn, group, threshold):
-#     """Function designed to match a word with a subgroup"""
-#     currmax = 0
-#     maxgroup = ""
-#     simvalues = dict()
-#     for sense in word_syn:  # for a given sense of a word
-#         similarities = []
-#         for key, value in group.items():  # value has all the similar words
-#             path_sim = find_sim(value, sense)
-#             # print("Similarity is:",path_sim)
-#             if path_sim > threshold:  # then append to the list
-#                 if path_sim > currmax:
-#                     maxgroup = key
-#                     currmax = path_sim
-#     return maxgroup
 
 
 def label_header(header):
@@ -276,87 +230,53 @@ def tokenize_header(text) -> Iterable[str]:
 
 def label_text(text: str) -> List[str]:
     labels: List[str] = []
+
+    if isinstance(text, list):
+        text = " ".join(text)
+    else:
+        text = str(text)
+
     for token in tokenize_header(text):
         synsets = get_synsets(token)
         if synsets:
             grp = match_group(synsets)
+            # Skip if the header matches a known false positive for this group
+           
+            # if isinstance(text, list):
+            #     text = " ".join(text)
+
+            if is_false_positive_header(text, grp):
+                # print(f"Skipping false positive header '{text}' for category '{grp}'")
+                continue
             if grp and grp not in labels:
                 labels.append(grp)
     return labels
-# def extract_categories(repo_data, repository_metadata: Result):
-#     """
-#     Function that adds category information extracted using header information
-#     Parameters
-#     ----------
-#     @param repo_data: data to use the header analysis
-#     @param repository_metadata: Result object with the results found so far in the repo
 
-#     Returns
-#     -------
-#     @return Result with the information added.
-#     """
-#     logging.info("Extracting information using headers")
-#     if repo_data is None or repo_data == "" or len(repo_data) == 0:
-#         return repository_metadata, []
-#     try:
-#         data, none_header_content = extract_header_content(repo_data)
-#         logging.info('Labeling headers.')
-#         if data.empty:
-#             logging.warning("File to analyze has no headers")
-#             return repository_metadata, [repo_data]
-#         data['Group'] = data['Header'].apply(lambda row: label_header(row))
-#         data['GroupParent'] = data['ParentHeader'].apply(lambda row: label_parent_headers(row))
-#         for i in data.index:
-#             if len(data['Group'][i]) == 0 and len(data['GroupParent'][i]) > 0:
-#                 data.at[i, 'Group'] = data['GroupParent'][i]
-#         data = data.drop(columns=['GroupParent'])
-#         if len(data['Group'].iloc[0]) == 0:
-#             # data['Group'].iloc[0] = ['unknown']
-#             data.loc[0, 'Group'] = ['unknown']
-#         groups = data.apply(lambda x: pd.Series(x['Group']), axis=1).stack().reset_index(level=1, drop=True)
 
-#         groups.name = 'Group'
-#         data = data.drop('Group', axis=1).join(groups)
-#         if data['Group'].iloc[0] == 'unknown':
-#             # data['Group'].iloc[0] = np.NaN
-#             data.loc[0, 'Group'] = np.nan
+def is_false_positive_header(text: str, category: str) -> bool:
+    """
+    Checks if a header is a known false positive for a given category.
 
-#         # to json
-#         group = data.loc[(data['Group'] != 'None') & pd.notna(data['Group'])]
-#         group.rename(columns={'Content': constants.PROP_VALUE}, inplace=True)
-#         group.rename(columns={'Header': constants.PROP_ORIGINAL_HEADER}, inplace=True)
-#         group.rename(columns={'ParentHeader': constants.PROP_PARENT_HEADER}, inplace=True)
-#         for index, row in group.iterrows():
-#             source = ""
-#             if constants.CAT_README_URL in repository_metadata.results.keys():
-#                 source = repository_metadata.results[constants.CAT_README_URL][0]
-#                 source = source[constants.PROP_RESULT][constants.PROP_VALUE]
-#             parent_header = ""
-#             if row[constants.PROP_PARENT_HEADER] != "":
-#                 parent_header = row.loc[constants.PROP_PARENT_HEADER]
-#             result = {
-#                 constants.PROP_VALUE: row.loc[constants.PROP_VALUE],
-#                 constants.PROP_TYPE: constants.TEXT_EXCERPT,
-#                 constants.PROP_ORIGINAL_HEADER: row.loc[constants.PROP_ORIGINAL_HEADER]
-#             }
-#             if parent_header != "" and len(parent_header) > 0:
-#                 result[constants.PROP_PARENT_HEADER] = parent_header
-#             if source != "":
-#                 repository_metadata.add_result(row.Group, result, 1, constants.TECHNIQUE_HEADER_ANALYSIS, source)
-#             else:
-#                 repository_metadata.add_result(row.Group, result, 1, constants.TECHNIQUE_HEADER_ANALYSIS)
+    Prevents headers like 'Reference implementation' from being classified as
+    bibliographic citations (CAT_CITATION) while allowing legitimate ones like 'References'.
 
-#         # strings without tag (they will be classified)
-#         string_list = data.loc[data['Group'].isna(), ['Content']].values.squeeze().tolist()
-#         if type(string_list) != list:
-#             string_list = [string_list]
-#         if none_header_content is not None and none_header_content != "":
-#             string_list.append(none_header_content.strip())
-#         logging.info("Header information extracted.")
-#         return repository_metadata, string_list
-#     except Exception as e:
-#         logging.error("Error while extracting headers: ", str(e))
-#         return repository_metadata, [repo_data]
+    Args:
+        text (str): The header text to check.
+        category (str): The category being considered (e.g., CAT_CITATION).
+
+    Returns:
+        bool: True if the header is a known false positive for the category.
+    """
+
+    text_lower = text.lower()
+
+    # false positives for bibliographic citations
+    if category == constants.CAT_CITATION:
+        for pattern in constants.NEGATIVE_PATTERNS_CITATION_HEADERS:
+            if pattern in text_lower:
+                return True
+    return False
+
 
 def extract_categories(repo_data: str, repository_metadata: Result) -> Tuple[Result, List[str]]:
     logging.info("Extracting information using headers")
@@ -384,11 +304,11 @@ def extract_categories(repo_data: str, repository_metadata: Result) -> Tuple[Res
         df.loc[df['Group'] == 'unknown', 'Group'] = np.nan
 
         valid = df[df['Group'].notna()].copy()
-        valid.rename(columns={
+        valid = valid.rename(columns={
             'Content': constants.PROP_VALUE,
             'Header': constants.PROP_ORIGINAL_HEADER,
             'ParentHeader': constants.PROP_PARENT_HEADER,
-        }, inplace=True)
+        })
 
         source = None
         if constants.CAT_README_URL in repository_metadata.results:

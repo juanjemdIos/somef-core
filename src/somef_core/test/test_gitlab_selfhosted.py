@@ -9,6 +9,7 @@ test_data_path = str(Path(__file__).parent / "test_data") + os.path.sep
 
 class TestGitlabSelfHosted(unittest.TestCase):    
 
+    @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
     def test_gitlab_self_hosted(self):
         
         """Checks if SOMEF works against server self_hosted Gitlab . Full analysis"""

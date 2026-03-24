@@ -518,6 +518,77 @@ class TestCodemetaExport(unittest.TestCase):
         
         os.remove(test_data_path + "test-417.json-ld")
 
+
+
+    def test_issue_723_codemeta(self):
+            """
+            Check that we extract the maintainers in the Codemeta output from the CODEOWNERS file. But without -ai flag
+            """
+
+            somef_cli.run_cli(threshold=0.9,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            doc_src=None,
+                            local_repo=test_data_repositories + "tensorflow",
+                            in_file=None,
+                            output=None,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out= test_data_path + 'test_codemeta_codeowners.json',
+                            pretty=True,
+                            missing=False)
+            
+            json_file_path = test_data_path + "test_codemeta_codeowners.json"
+            text_file = open(json_file_path, "r")
+            data = text_file.read()
+            json_content = json.loads(data)
+            text_file.close()
+
+            maintainers= json_content.get("maintainer", [])
+            assert len(maintainers) == 10, f"Expected 10 maintainers, found {len(maintainers)}"
+            identifiers = [m.get("identifier") for m in maintainers]
+            assert "qqfish" in identifiers, "Expected maintainer 'qqfish' not found" 
+            assert "penpornk" in identifiers, "Expected maintainer 'penpornk' not found"
+
+            os.remove(json_file_path)
+
+
+    def test_issue_891(self):
+       
+        """
+        Checks that the CodeMeta export include just structured requirements extracted by code parsers, excluding any textual
+        entries coming from readme, codemeta.json or other non structured sources.
+        """
+
+        output_path = test_data_path + 'test_codemeta_issue_891.json'
+
+        somef_cli.run_cli(threshold=0.9,
+                          ignore_classifiers=False,
+                          repo_url=None,
+                          doc_src=None,
+                          local_repo=test_data_repositories + "somef_repo",
+                          in_file=None,
+                          output=None,
+                          graph_out=None,
+                          graph_format="turtle",
+                          codemeta_out= output_path,
+                          pretty=True,
+                          missing=False)
+        
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        requirements = json_content.get("softwareRequirements", [])
+        assert all(isinstance(req, dict) and "name" in req for req in requirements), \
+        f"Expected only structured requirement objects, found: {requirements}"
+
+        req_dict = {req["name"]: req for req in requirements} 
+        assert "python" in req_dict, "Missing expected requirement: python" 
+        assert req_dict["python"].get("version") == ">=3.9,<=3.13"
+        
+        os.remove(output_path)
+
+
     @classmethod
     def tearDownClass(cls):
         """delete temp file JSON just if all the test pass"""
@@ -528,8 +599,6 @@ class TestCodemetaExport(unittest.TestCase):
             except Exception as e:
                 print(f"Failed to delete {cls.json_file}: {e}")  
 
-    
+
 if __name__ == "__main__":
     unittest.main()
- 
-    

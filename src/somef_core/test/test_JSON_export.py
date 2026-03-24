@@ -203,10 +203,8 @@ class TestJSONExport(unittest.TestCase):
         data = text_file.read()
         text_file.close()
         json_content = json.loads(data)
-        licenses = json_content["license"]
 
-        # print('---------------------------')
-        # print(licenses)
+        licenses = json_content["license"]
 
         for i, license_entry in enumerate(licenses):
             assert "spdx_id" in license_entry["result"], f"Missing 'spdx_id' in license{i}"
@@ -306,8 +304,6 @@ class TestJSONExport(unittest.TestCase):
       
         found = False  
         homepage_entries = data.get("homepage", [])
-        print('---------------------------')
-        print(homepage_entries)
         for item in homepage_entries:
             technique = item.get("technique")
             result = item.get("result", {})
@@ -469,5 +465,194 @@ class TestJSONExport(unittest.TestCase):
 
         os.remove(test_data_path + "test-859.json")
 
+    def test_issue_723(self):
+        """Checks if we exract the maintainers in the Codemeta output from the CODEOWNERS file. 
+        But without -ai flag because requiere real requests to GitHub API and we want to avoid that in the tests. 
+        """
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "tensorflow",
+                            doc_src=None,
+                            in_file=None,
+                            output=test_data_path + "test_issue_723.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_723.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
 
-   
+        maintainers= json_content.get("maintainer", [])
+        assert len(maintainers) == 10, f"Expected 10 maintainers, found {len(maintainers)}"
+        usernames = [m.get("result", {}).get("username") for m in maintainers]
+        assert "qqfish" in usernames, "Expected maintainer 'qqfish' not found" 
+        assert "penpornk" in usernames, "Expected maintainer 'penpornk' not found"
+        
+        os.remove(test_data_path + "test_issue_723.json")
+
+
+    def test_unify_json(self):
+        """
+        Checks that duplicated requirement entries extracted by different techniques
+        are unified into a single item, preserving all complementary information
+        (techniques, sources, and result fields).
+        """
+
+        output_path = test_data_path + 'test_widoco_unify.json'
+
+        somef_cli.run_cli(  threshold=0.8,
+                            local_repo=test_data_repositories + "Widoco",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        requirements = json_content.get(constants.CAT_REQUIREMENTS, [])
+
+        unified_reqs = [ r for r in requirements if "You will need Java 1.8" in r["result"].get("value", "") ]
+        assert unified_reqs, "There should be at least one unified Java requirement entry" 
+        
+        req = unified_reqs[0]
+        assert set(req["technique"]) == {"code_parser", "header_analysis"},"Techniques should be merged from both extractors"
+
+        os.remove(test_data_path + "test_widoco_unify.json")
+
+    def test_unify_json_2(self):
+        """
+        Checks that duplicated requirement entries extracted by different techniques
+        are unified into a single item, preserving all complementary information
+        (techniques, sources, and result fields).
+        """
+
+        output_path = test_data_path + 'test_somef_unify.json'
+
+        somef_cli.run_cli(  threshold=0.8,
+                            local_repo=test_data_repositories + "somef_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        documentation = json_content.get(constants.CAT_DOCUMENTATION, [])
+
+        rtd_items = [
+            d for d in documentation
+            if d["result"].get("type") == "Url"
+            and d["result"].get("format") == "readthedocs"
+        ]
+
+        assert len(rtd_items) == 1, "There should be exactly one unified ReadTheDocs documentation entry"
+
+        rtd = rtd_items[0]
+
+        assert rtd["result"]["value"] == "https://somef.readthedocs.io/", "The unified ReadTheDocs URL must be canonical"
+
+        for d in documentation:
+            if d["result"].get("type") == "Url":
+                val = d["result"].get("value", "")
+                assert val == "https://somef.readthedocs.io/", f"Unexpected non canonical ReadTheDocs URL found: {val}"
+
+
+        os.remove(test_data_path + "test_somef_unify.json")
+
+
+    @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
+    def test_issue_gitlab_enrich_authors(self):
+        """Tests if a gitlab repository with codeowners file gets enriched with the information of the users in the codeowners file.
+        This test is skipped in CI because it requires real requests to GitLab API and we want to avoid hitting the rate limit.
+        """
+        output_file = test_data_path + "test-gitlab-reconcile.json"
+
+        somef_cli.run_cli(threshold=0.8,
+            ignore_classifiers=False,
+            repo_url="https://gitlab.com/sosy-lab/benchmarking/fm-tools/",
+            local_repo=None,
+            doc_src=None,
+            in_file=None,
+            output=output_file,
+            graph_out=None,
+            graph_format="turtle",
+            codemeta_out=None,
+            pretty=True,
+            missing=True,
+            readme_only=False,
+            reconcile_authors=True
+        )
+
+        with open(output_file, "r") as f: 
+            json_content = json.load(f)
+
+        maintainers = json_content.get(constants.CAT_MAINTAINER, [])
+        self.assertTrue(len(maintainers) >= 2, "Expected at least two maintainers")
+
+        first = maintainers[0].get("result", {})
+        self.assertEqual(first.get("username"), "dbeyer")
+        self.assertEqual(first.get("name"), "Dirk Beyer")
+        self.assertEqual(first.get("email"), "dirk.beyer@sosy-lab.org")
+
+        second = maintainers[1].get("result", {})
+        self.assertEqual(second.get("username"), "FrNecas")
+        self.assertEqual(second.get("name"), "František Nečas")
+
+        os.remove(output_file)
+
+
+    @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
+    def test_issue_914(self):
+        """
+        Checks that somef can correctly handle and download a GitLab repository whose URL includes nested group/subgroup paths, 
+        ensuring complex GitLab routes are processed without errors.
+        """
+
+        output_file = test_data_path + "test-issue-914.json"
+
+        somef_cli.run_cli(threshold=0.8,
+            ignore_classifiers=False,
+            repo_url="https://gitlab.com/gitlab-org/frontend/playground/batch-issue-creator",
+            local_repo=None,
+            doc_src=None,
+            in_file=None,
+            output=output_file,
+            graph_out=None,
+            graph_format="turtle",
+            codemeta_out=None,
+            pretty=True,
+            missing=True,
+            readme_only=False,
+            reconcile_authors=True
+        )
+
+        with open(output_file, "r") as f: 
+            json_content = json.load(f)
+
+        title = json_content.get(constants.CAT_FULL_TITLE, [])
+        self.assertEqual(title[0].get("result", {}).get("value"), "batch-issue-creator")
+
+        requirements = json_content.get(constants.CAT_REQUIREMENTS, [])
+        self.assertEqual(requirements[0].get("result", {}).get("version"), "3.20.3")
+
+        os.remove(output_file)

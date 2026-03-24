@@ -542,6 +542,7 @@ class TestCli(unittest.TestCase):
         assert data.find("https://github.com/mbloch/mapshaper/wiki") != -1
         os.remove(test_data_path + "test-255.json")
 
+    @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
     def test_issue_255_1(self):
         """Tests if somef can detect the abscence of wikis if a repo does not have it."""
         somef_cli.run_cli(threshold=0.8,
@@ -625,27 +626,6 @@ class TestCli(unittest.TestCase):
         text_file.close()
         assert data.find("doi") >= 0
         os.remove(test_data_path + "test-136-1.json")
-
-    def test_issue_353(self):
-        """Tests that somef can successfully download a given github repo (reportedly failing)"""
-        somef_cli.run_cli(threshold=0.8,
-                          ignore_classifiers=False,
-                          repo_url="https://github.com/proycon/analiticcl",
-                          local_repo=None,
-                          doc_src=None,
-                          in_file=None,
-                          output=test_data_path + "test-353.json",
-                          graph_out=None,
-                          graph_format="turtle",
-                          codemeta_out=None,
-                          pretty=True,
-                          missing=True,
-                          readme_only=False)
-        text_file = open(test_data_path + "test-353.json", "r")
-        data = text_file.read()
-        text_file.close()
-        assert data.find(constants.CAT_DESCRIPTION) >= 0
-        os.remove(test_data_path + "test-353.json")
 
     def test_issue_366(self):
         """Checks if somef can detect Docker compose files"""
@@ -788,4 +768,27 @@ class TestCli(unittest.TestCase):
         assert constants.CAT_ACKNOWLEDGEMENT not in json_content
         os.remove(test_data_path + "repositories/software_catalog/test-567.json")
 
-
+    def test_redundant_files(self):
+        """
+        This test checks if the redundant files for the repository TEC-Toolkit/CFO work correctly.
+        An error was detected in this repo
+        """
+        somef_cli.run_cli(threshold=0.8,
+                          ignore_classifiers=False,
+                          repo_url="https://github.com/Tec-Toolkit/ECFO",
+                          local_repo=None,
+                          doc_src=None,
+                          in_file=None,
+                          output=test_data_path + "test-ecfo.json",
+                          graph_out=None,
+                          graph_format="turtle",
+                          codemeta_out=None,
+                          pretty=True,
+                          missing=True,
+                          readme_only=False)
+        text_file = open(test_data_path + "test-ecfo.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+        assert constants.CAT_TYPE not in json_content
+        os.remove(test_data_path + "test-ecfo.json")

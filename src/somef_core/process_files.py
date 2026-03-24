@@ -24,13 +24,15 @@ from .parser.toml_parser import parse_toml_file
 from .parser.cabal_parser import parse_cabal_file
 from .parser.dockerfile_parser import parse_dockerfile
 from .parser.publiccode_parser import parse_publiccode_file
+from .parser.codeowners_parser import parse_codeowners_file
+from .parser.conda_environment_parser import parse_conda_environment_file
 from chardet import detect
 
 
 domain_gitlab = ''
 
 def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner="", repo_name="",
-                             repo_default_branch="", ignore_test_folder=True):
+                             repo_default_branch="", ignore_test_folder=True, reconcile_authors=False):
     """
     Method that given a folder, it recognizes whether there are notebooks, dockerfiles, docs, script files or
     ontologies.
@@ -49,11 +51,14 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
     @return: text of the main readme and a JSON dictionary (filtered_resp) with the findings in files
     """
 
+    global domain_gitlab
     if repo_type == constants.RepositoryType.GITLAB:      
         domain_gitlab = extract_gitlab_domain(metadata_result, repo_type)
 
     text = ""
     readmeMD_proccesed = False
+
+    is_local_repo = (owner == "" and repo_name == "")
 
     try:
         parsed_build_files = set()
@@ -61,6 +66,9 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
         for dir_path, dir_names, filenames in os.walk(repo_dir):
 
             dir_names[:] = [d for d in dir_names if d.lower() not in constants.IGNORED_DIRS]
+            if is_local_repo:
+                dir_names[:] = [d for d in dir_names if d.lower() != "lib"]
+
             repo_relative_path = os.path.relpath(dir_path, repo_dir)
             current_dir = os.path.basename(repo_relative_path).lower()
             # if this is a test folder, we ignore it (except for the root repo)
@@ -225,7 +233,14 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                )
 
                 if filename.upper() == constants.CODEOWNERS_FILE:
-                    codeowners_json = parse_codeowners_structured(dir_path,filename)
+                    # codeowners_json = parse_codeowners_structured(dir_path,filename)
+                    logging.info("Processing CODEOWNERS file...")
+                    codeowner_file_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
+                                                       repo_dir,
+                                                       repo_relative_path, filename)
+
+                    metadata_result = parse_codeowners_file(os.path.join(dir_path, filename), metadata_result, codeowner_file_url, reconcile_authors, repo_type, server_url=domain_gitlab)
+                    parsed_build_files.add(filename.lower())
 
                 if filename.lower() == "codemeta.json":
                     if filename.lower() in parsed_build_files and repo_relative_path != ".":
@@ -235,11 +250,11 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                     codemeta_file_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir, repo_relative_path, filename)
                     metadata_result = parse_codemeta_json_file(os.path.join(dir_path, filename), metadata_result, codemeta_file_url)
                     parsed_build_files.add(filename.lower())
-                    # TO DO: Code owners not fully implemented yet
 
                 if filename.lower() == "pom.xml" or filename.lower() == "package.json" or \
                         filename.lower() == "pyproject.toml" or filename.lower() == "setup.py" or filename.endswith(".gemspec") or \
                         filename.lower() == "requirements.txt" or filename.lower() == "bower.json" or filename == "DESCRIPTION" or \
+                        (filename.lower() == "environment.yml" or filename.lower() == "environment.yaml") or \
                         (filename.lower() == "cargo.toml" and repo_relative_path == ".") or (filename.lower() == "composer.json" and repo_relative_path == ".") or \
                         (filename == "Project.toml" or (filename.lower()== "publiccode.yml" or filename.lower()== "publiccode.yaml") and repo_relative_path == "."):
                         if filename.lower() in parsed_build_files and repo_relative_path != ".":
@@ -281,6 +296,10 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                             metadata_result = parse_cabal_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "publiccode.yml" or filename.lower() == "publiccode.yaml":
                             metadata_result = parse_publiccode_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        if filename.lower() == "environment.yml" or filename.lower() == "environment.yaml":
+                            print("Processing conda environment file...")
+                            metadata_result = parse_conda_environment_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
+
                         parsed_build_files.add(filename.lower())
                           
                 # if repo_type == constants.RepositoryType.GITLAB: 
@@ -304,12 +323,6 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                         constants.PROP_TYPE: constants.URL
                                                     }, 1, constants.TECHNIQUE_FILE_EXPLORATION)        
                     elif repo_type == constants.RepositoryType.GITHUB:
-                        # if file_path.startswith(".github/workflows/"):
-                        #     category = constants.CAT_WORKFLOWS
-                        # elif filename in [".travis.yml", "azure-pipelines.yml", "jenkinsfile"] or file_path.startswith(".circleci/"):
-                        #     category = constants.CAT_CONTINUOUS_INTEGRATION
-                        # else:
-                        #     category = None
                         if file_path.startswith(".github/workflows/"):
                             category = constants.CAT_CONTINUOUS_INTEGRATION
                         else:
@@ -636,20 +649,6 @@ def extract_gitlab_domain(metadata_result, repo_type):
             
             return domain
     return None  
-
-def parse_codeowners_structured(dir_path, filename):
-    codeowners = []
-
-    with open(os.path.join(dir_path, filename), "r", encoding="utf-8") as file:
-        for line in file:
-            line = line.strip()
-            if line and not line.startswith("#"):
-                parts = line.split()
-                path = parts[0]  
-                owners = parts[1:] 
-                codeowners.append({"path": path, "owners": owners})
-
-    return {"codeowners": codeowners}
 
 def clean_text(text):
     cleaned_lines = []

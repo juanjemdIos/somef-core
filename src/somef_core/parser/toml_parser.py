@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
-import tomli
+
+# for compatibility in python 3.11 projects
+try:
+    import tomllib as tomli
+except ModuleNotFoundError:
+    import tomli
 import re
 import os
 import logging
@@ -336,8 +341,8 @@ def parse_cargo_metadata(data, metadata_result, source, file_path):
                     "name": name,
                     "version": version,
                     "type": constants.SOFTWARE_APPLICATION,
-                    "dependency_type": dep_type
-                },
+                    "dependency_type": dep_type,
+                    "dependency_resolver": "cargo"               },
                 1,
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
                 source
@@ -358,7 +363,8 @@ def parse_cargo_metadata(data, metadata_result, source, file_path):
                         "name": name,
                         "version": version,
                         "type": constants.SOFTWARE_APPLICATION,
-                        "dependency_type": dep_type
+                        "dependency_type": dep_type,
+                        "dependency_resolver": "cargo"
                     },
                     1,
                     constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -399,7 +405,9 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                         "value": req,
                         "name": name,
                         "version": version,
-                        "type": constants.SOFTWARE_APPLICATION
+                        "type": constants.SOFTWARE_APPLICATION,
+                        "dependency_type":constants.DEPENDENCY_TYPE_RUNTIME,
+                        "dependency_resolver": "python"
                     },
                     1,
                     constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -414,7 +422,9 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                     "value": req,
                     "name": name,
                     "version": version,
-                    "type": constants.SOFTWARE_APPLICATION
+                    "type": constants.SOFTWARE_APPLICATION,
+                    "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
+                    "dependency_resolver": "python"
                 },
                 1,
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -434,7 +444,9 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                             "value": req,
                             "name": name,
                             "version": version,
-                            "type": constants.SOFTWARE_APPLICATION
+                            "type": constants.SOFTWARE_APPLICATION,
+                            "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
+                            "dependency_resolver": "python"
                         },
                         1,
                         constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -560,12 +572,40 @@ def parse_julia_project_metadata(data, metadata_result, source):
                 constants.CAT_REQUIREMENTS,
                 {
                     "value": req,
-                    "type": constants.STRING
+                    "name": req,
+                    "type": constants.SOFTWARE_APPLICATION,
+                    "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
+                    "dependency_resolver": "julia"
                 },
                 1,
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
                 source
             )
+            
+    # devs requirements      
+    dev_deps = set()
+
+    if "extras" in data:
+        dev_deps.update(data["extras"].keys())
+
+    if "targets" in data and "test" in data["targets"]:
+        dev_deps.update(data["targets"]["test"])
+
+    # Emit dev deps
+    for req in dev_deps:
+        metadata_result.add_result(
+            constants.CAT_REQUIREMENTS,
+            {
+                "value": req,
+                "name": req,
+                "type": constants.SOFTWARE_APPLICATION,
+                "dependency_type": constants.DEPENDENCY_TYPE_DEVELOPMENT,
+                "dependency_resolver": "julia"
+            },
+            1,
+            constants.TECHNIQUE_CODE_CONFIG_PARSER,
+            source
+        )
 
     if "compat" in data:
         compat = data["compat"]
