@@ -46,7 +46,18 @@ def parse_package_json_file(file_path, metadata_result: Result, source):
                     constants.TECHNIQUE_CODE_CONFIG_PARSER,
                     source
                 )
-            
+
+            if "homepage" in data:
+                metadata_result.add_result(
+                    constants.CAT_HOMEPAGE,
+                    {
+                        "value": data["homepage"], 
+                        "type": constants.URL},
+                    1,
+                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                    source
+                )
+
             if "version" in data:
                 metadata_result.add_result(
                     constants.CAT_VERSION,
@@ -137,30 +148,51 @@ def parse_package_json_file(file_path, metadata_result: Result, source):
                         constants.TECHNIQUE_CODE_CONFIG_PARSER,
                         source
                     )
+
+            runtimes = parse_runtime_platform_from_package_json(data)
+            if runtimes:
+                for runtime in runtimes:
+                    metadata_result.add_result(
+                        constants.CAT_RUNTIME_PLATFORM,
+                        runtime,
+                        1,
+                        constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                        source
+                    )
+         
+            # deps = {}
+            # deps.update(data.get("dependencies", {}))
+            # deps.update(data.get("devDependencies", {}))
             
-            deps = {}
-            deps.update(data.get("dependencies", {}))
-            deps.update(data.get("devDependencies", {}))
-            
-            for name, version in deps.items():
-                req = f"{name}@{version}"
-                metadata_result.add_result(
-                    constants.CAT_REQUIREMENTS,
-                    {
-                        "value": req, 
-                        "name": name, 
-                        "version": version, 
-                        "type": constants.SOFTWARE_APPLICATION
-                    },
-                    1,
-                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
-                    source
-                )
+            # for name, version in deps.items():
+            sections = {
+                "dependencies": constants.DEPENDENCY_TYPE_RUNTIME,
+                "devDependencies": constants.DEPENDENCY_TYPE_DEVELOPMENT
+            }
+
+            for section, dep_type in sections.items():
+                for name, version in data.get(section, {}).items():
+                    req = f"{name}@{version}"
+                    metadata_result.add_result(
+                        constants.CAT_REQUIREMENTS,
+                        {
+                            "value": req,
+                            "name": name,
+                            "version": version,
+                            "type": constants.SOFTWARE_APPLICATION,
+                            "dependency_type": dep_type,
+                            "dependency_resolver": "npm"
+                        },
+                        1,
+                        constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                        source
+                    )
 
             metadata_result.add_result(
                 constants.CAT_HAS_PACKAGE_FILE,
                 {
-                    "value": "package.json",
+                    # "value": "package.json",
+                    "value": source,
                     "type": constants.URL,
                 },
                 1,
@@ -200,3 +232,32 @@ def parse_bugs(bugs_data):
     if isinstance(bugs_data, str):
         return bugs_data
     return None
+
+def parse_runtime_platform_from_package_json(data):
+    """
+    Extract runtime information from a package.json dict.
+    Returns a list of dicts with 'name' and 'version', e.g.:
+    [{'name': 'Node.js', 'version': '18.x'}]
+    """
+    runtimes = []
+
+    engines = data.get("engines", {})
+    if isinstance(engines, dict):
+        for runtime_name, version_value in engines.items():
+
+            if version_value:
+                value_str = f"{runtime_name}: {version_value}".strip()
+            else:
+                value_str = runtime_name
+
+            run = {
+                "value": value_str,
+                "name": runtime_name.capitalize(),
+                "type": constants.STRING
+            }
+            if version_value:
+                run["version"] = version_value.strip()
+            
+            runtimes.append(run)  
+    
+    return runtimes

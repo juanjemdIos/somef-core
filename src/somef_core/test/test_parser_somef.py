@@ -2,7 +2,7 @@ import unittest
 import os
 from pathlib import Path
 
-from somef.parser.mardown_parser import extract_headers, extract_headers_with_tags, extract_content_per_header, \
+from somef_core.parser.mardown_parser import extract_headers, extract_headers_with_tags, extract_content_per_header, \
     extract_bash, extract_blocks_excerpts, extract_text_excerpts_header, extract_headers_parents, is_header
 
 # Test data for tests
@@ -72,3 +72,14 @@ class TestParserSomef(unittest.TestCase):
         print(is_header(first_header))
         print(is_header(second_header))
         assert (not is_header(first_header) and is_header(second_header))
+
+    def test_extract_empty_headers(self):
+        """Test to check if the markdown parser detects the right text blocks"""
+        with open(test_data_path + "README-almost-empty.md", "r") as data_file:
+            text = data_file.read()
+
+            headers = extract_headers(text) 
+            assert headers == {} 
+            content, non_header_content = extract_content_per_header(text, headers)         
+            assert content == []
+            assert non_header_content.strip() == text.strip()

@@ -33,10 +33,10 @@ def configure(auto, base_uri):
         configuration.update_base_uri(base_uri)
     else:
         authorization = click.prompt("Authorization", default="")
-        description = None
-        invocation = None
-        installation = None
-        citation = None
+        description = click.prompt("Documentation classifier model file", default=configuration.default_description)
+        invocation = click.prompt("Invocation classifier model file", default=configuration.default_invocation)
+        installation = click.prompt("Installation classifier model file", default=configuration.default_installation)
+        citation = click.prompt("Citation classifier model file", default=configuration.default_citation)
         base_uri = click.prompt("Base URI for RDF generation", default=base_uri)
         # configuration.configure()
         configuration.configure(authorization, description, invocation, installation, citation, base_uri)
@@ -115,6 +115,12 @@ def configure(auto, base_uri):
     help="Path to an output codemeta file"
 )
 @optgroup.option(
+    "--google_codemeta_out",
+    "-gc",
+    type=click.Path(),
+    help="Path to an output Google-compliant codemeta file"
+)
+@optgroup.option(
     "--graph_out",
     "-g",
     type=click.Path(),
@@ -157,8 +163,50 @@ def configure(auto, base_uri):
     default=True,
     help="""SOMEF will ignore the contents of all files within folders named test (True by default)"""
 )
-def describe(**kwargs):
+@click.option(
+    "--requirements_all",
+    "-all",
+    is_flag=True,
+    default=False,
+    help="Export all detected requirements, including text and libraries (default)."
+)
+@click.option(
+    "--requirements_v",
+    "-v",
+    is_flag=True,
+    default=False,
+    help="Export only requirements from structured sources (pom.xml, requirements.txt, etc.)"
+)
+@click.option(
+    "--reconcile_authors",
+    "-ra",
+    is_flag=True,
+    default=False,
+    help="""SOMEF will extract additional information from certain files like CODEOWNERS, etc."""
+)
+@click.option(
+    "--branch",
+    "-b",
+    type=str,
+    default=None,
+    help="Branch of the repository to analyze. Overrides the default branch."
+)
+@click.option(
+    "--tag",
+    type=str,
+    default=None,
+    help="Tag of the repository to analyze. Incompatible with --branch"
+)
+def describe(requirements_v, requirements_all, **kwargs):
     # import so missing packages get installed when appropriate
+    if requirements_v:
+        kwargs["requirements_mode"] = "v"
+    elif requirements_all:
+        kwargs["requirements_mode"] = "all"
+    else:
+        kwargs["requirements_mode"] = "all" 
+
     from . import somef_cli
     somef_cli.run_cli(**kwargs)
     click.secho(f"Success", fg="green")
+    
