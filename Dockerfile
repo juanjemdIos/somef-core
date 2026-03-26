@@ -6,7 +6,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 RUN pip install poetry-plugin-shell
 
-WORKDIR "/somef-core"
+WORKDIR "/somef_core"
 
 RUN poetry install 
 

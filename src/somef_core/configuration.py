@@ -3,7 +3,15 @@ from pathlib import Path
 import json
 import sys
 import logging
+
 from .utils import constants
+
+path = Path(__file__).parent.absolute()
+default_description = os.path.join(str(path), "models", "description.p")
+default_invocation = os.path.join(str(path), "models", "invocation.p")
+default_installation = os.path.join(str(path), "models", "installation.p")
+default_citation = os.path.join(str(path), "models", "citation.p")
+
 
 def get_configuration_file():
     """
@@ -39,11 +47,12 @@ def update_base_uri(base_uri):
             credentials_file.chmod(0o600)
             json.dump(data, fh)
 
+
 def configure(authorization="",
-              description=None,
-              invocation=None,
-              installation=None,
-              citation=None,
+              description=default_description,
+              invocation=default_invocation,
+              installation=default_installation,
+              citation=default_citation,
               base_uri=constants.CONF_DEFAULT_BASE_URI):
     """ Function to configure the main program"""
     import nltk

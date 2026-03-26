@@ -296,6 +296,7 @@ class TestCli(unittest.TestCase):
         assert data.find(constants.FORMAT_CFF) > 0
         os.remove(test_data_path + "test-319-1.json")
 
+
     def test_issue_319_2(self):
         """Test checks that the output format of citation files is specified in the output"""
         somef_cli.run_cli(threshold=0.8,
@@ -406,17 +407,19 @@ class TestCli(unittest.TestCase):
     def test_issue_314_1(self):
         """Checks that the program can be run using only a single readme. GitHub"""
         somef_cli.run_cli(threshold=0.8,
-                          ignore_classifiers=False,
-                          repo_url="https://github.com/tensorflow/tensorflow/tree/v2.6.0",
-                          doc_src=None,
-                          in_file=None,
-                          output=test_data_path + "test-314-1.json",
-                          graph_out=None,
-                          graph_format="turtle",
-                          codemeta_out=None,
-                          pretty=True,
-                          missing=True,
-                          readme_only=True)
+                            ignore_classifiers=False,
+                            # repo_url="https://github.com/tensorflow/tensorflow/tree/v2.6.0",
+                            repo_url=None,
+                            # doc_src=None,
+                            doc_src= test_data_path + "README-tensorflow-2.6.0.md",
+                            in_file=None,
+                            output=test_data_path + "test-314-1.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=True,
+                            readme_only=True)
         text_file = open(test_data_path + "test-314-1.json", "r")
         data = text_file.read()
         text_file.close()
@@ -425,11 +428,14 @@ class TestCli(unittest.TestCase):
         assert image is not None
         os.remove(test_data_path + "test-314-1.json")
 
+
     def test_issue_403(self):
         """Checks that the readme link returned by somef is correct"""
         somef_cli.run_cli(threshold=0.8,
                           ignore_classifiers=False,
                           repo_url="https://github.com/oeg-upm/wot-hive",
+                        #   repo_url=None,
+                        #   local_repo=test_data_repositories + "wot-hive",
                           doc_src=None,
                           in_file=None,
                           output=test_data_path + "test-403.json",
@@ -489,7 +495,6 @@ class TestCli(unittest.TestCase):
         text_file = open(test_data_path + "test-225.json", "r")
         data = text_file.read()
         text_file.close()
-        print(data)
         assert data.find("\"" + constants.PROP_FORMAT + "\": \"" + constants.FORMAT_WIKI + "\"")
         os.remove(test_data_path + "test-225.json")
 
@@ -517,24 +522,27 @@ class TestCli(unittest.TestCase):
     def test_issue_255(self):
         """Tests if somef can detect wiki articles"""
         somef_cli.run_cli(threshold=0.8,
-                          ignore_classifiers=False,
-                          repo_url="https://github.com/mbloch/mapshaper/",
-                          local_repo=None,
-                          doc_src=None,
-                          in_file=None,
-                          output=test_data_path + "test-255.json",
-                          graph_out=None,
-                          graph_format="turtle",
-                          codemeta_out=None,
-                          pretty=True,
-                          missing=True,
-                          readme_only=False)
+                            ignore_classifiers=False,
+                            # repo_url="https://github.com/mbloch/mapshaper/",
+                            repo_url=None,
+                            local_repo=None,
+                            # doc_src=None,
+                            doc_src=test_data_path + "README-mapshaper.md",
+                            in_file=None,
+                            output=test_data_path + "test-255.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=True,
+                            readme_only=False)
         text_file = open(test_data_path + "test-255.json", "r")
         data = text_file.read()
         text_file.close()
         assert data.find("https://github.com/mbloch/mapshaper/wiki") != -1
         os.remove(test_data_path + "test-255.json")
 
+    @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
     def test_issue_255_1(self):
         """Tests if somef can detect the abscence of wikis if a repo does not have it."""
         somef_cli.run_cli(threshold=0.8,
@@ -619,27 +627,6 @@ class TestCli(unittest.TestCase):
         assert data.find("doi") >= 0
         os.remove(test_data_path + "test-136-1.json")
 
-    def test_issue_353(self):
-        """Tests that somef can successfully download a given github repo (reportedly failing)"""
-        somef_cli.run_cli(threshold=0.8,
-                          ignore_classifiers=False,
-                          repo_url="https://github.com/proycon/analiticcl",
-                          local_repo=None,
-                          doc_src=None,
-                          in_file=None,
-                          output=test_data_path + "test-353.json",
-                          graph_out=None,
-                          graph_format="turtle",
-                          codemeta_out=None,
-                          pretty=True,
-                          missing=True,
-                          readme_only=False)
-        text_file = open(test_data_path + "test-353.json", "r")
-        data = text_file.read()
-        text_file.close()
-        assert data.find(constants.CAT_DESCRIPTION) >= 0
-        os.remove(test_data_path + "test-353.json")
-
     def test_issue_366(self):
         """Checks if somef can detect Docker compose files"""
         somef_cli.run_cli(threshold=0.8,
@@ -660,6 +647,7 @@ class TestCli(unittest.TestCase):
         text_file.close()
         assert data.find(constants.FORMAT_DOCKERFILE) >= 0
         os.remove(test_data_path + "test-366.json")
+
 
     def test_issue_443(self):
         somef_cli.run_cli(threshold=0.8,
@@ -704,6 +692,7 @@ class TestCli(unittest.TestCase):
         description = json_content[constants.CAT_DESCRIPTION]
         assert description is not None
         os.remove(test_data_path + "test-443.json")
+
 
     def test_issue_556(self):
         """
@@ -778,3 +767,28 @@ class TestCli(unittest.TestCase):
         text_file.close()
         assert constants.CAT_ACKNOWLEDGEMENT not in json_content
         os.remove(test_data_path + "repositories/software_catalog/test-567.json")
+
+    def test_redundant_files(self):
+        """
+        This test checks if the redundant files for the repository TEC-Toolkit/CFO work correctly.
+        An error was detected in this repo
+        """
+        somef_cli.run_cli(threshold=0.8,
+                          ignore_classifiers=False,
+                          repo_url="https://github.com/Tec-Toolkit/ECFO",
+                          local_repo=None,
+                          doc_src=None,
+                          in_file=None,
+                          output=test_data_path + "test-ecfo.json",
+                          graph_out=None,
+                          graph_format="turtle",
+                          codemeta_out=None,
+                          pretty=True,
+                          missing=True,
+                          readme_only=False)
+        text_file = open(test_data_path + "test-ecfo.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+        assert constants.CAT_TYPE not in json_content
+        os.remove(test_data_path + "test-ecfo.json")

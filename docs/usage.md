@@ -1,4 +1,4 @@
-To see the available options for SOMEF-core:
+To see the available options for SOMEF:
 
 ```bash
 somef_core --help
@@ -52,7 +52,7 @@ Options:
                                   file.
 
   -m, --missing                   JSON report with the missing metadata fields
-                                  SOMEF-core was not able to find. The report will
+                                  SOMEF was not able to find. The report will
                                   be placed in  $PATH_missing.json, where
                                   $PATH is -o, -c or -g.
   -kt, --keep_tmp PATH            SOMEF will NOT delete the temporary folder

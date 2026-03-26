@@ -4,11 +4,8 @@
 
 
 ## Install from Pypi
-SOMEF [is available in Pypi!](https://pypi.org/project/somef/). To install it just type:
 
-```
-pip install somef
-```
+We are currently working on this
 
 ## Install from GitHub
 To run SOMEF, please follow the next steps:
