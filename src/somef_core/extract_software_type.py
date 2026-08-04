@@ -1,15 +1,13 @@
 import os
 from pathlib import Path
 import nbformat
+import logging
 from nbformat.reader import NotJSONError
 from chardet import detect
 import re
 from .extract_workflows import is_file_workflow
 from .process_results import Result
 from .utils import constants
-# from .extract_ontologies import is_file_ontology
-
-import pdb
 
 
 def check_repository_type(path_repo, title, metadata_result: Result):
@@ -17,23 +15,15 @@ def check_repository_type(path_repo, title, metadata_result: Result):
         output depending on the software type or if the repository is not considered software"""
 
     if check_static_websites(path_repo, metadata_result):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'static-website',
                                        constants.PROP_TYPE: constants.STRING
                                    },
                                    1,
                                    constants.TECHNIQUE_HEURISTICS)
-    # elif check_ontologies(path_repo):
-    #     metadata_result.add_result(constants.CAT_TYPE,
-    #                                {
-    #                                    constants.PROP_VALUE: 'ontology',
-    #                                    constants.PROP_TYPE: constants.STRING
-    #                                },
-    #                                1,
-    #                                constants.TECHNIQUE_HEURISTICS)
     elif check_notebooks(path_repo):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'notebook-application',
                                        constants.PROP_TYPE: constants.STRING
@@ -52,7 +42,7 @@ def check_repository_type(path_repo, title, metadata_result: Result):
     elif check_command_line(path_repo):
         """The 0.82 confidence result is from running the analysis on 300 repos and showing the precision 
             of the heuristic"""
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'commandline-application',
                                        constants.PROP_TYPE: constants.STRING
@@ -61,7 +51,7 @@ def check_repository_type(path_repo, title, metadata_result: Result):
                                    constants.TECHNIQUE_HEURISTICS)
 
     elif check_extras(path_repo):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'non-software',
                                        constants.PROP_TYPE: constants.STRING
@@ -100,23 +90,6 @@ def check_notebooks(path_repo):
     if code_notebooks > 1:
         return not bad_extensions
     return False
-
-
-# def check_ontologies(path_repo):
-#     """Function which detects if repository is an Ontology based on files present
-#        and the non-existence of code files"""
-#     ontology = False
-#     for root, dirs, files in os.walk(path_repo):
-#         repo_relative_path = os.path.relpath(root, path_repo)
-#         for file in files:
-#             file_path = os.path.join(repo_relative_path, file)
-#             # print(os.path.join(repo_relative_path,file_path))
-#             if file.endswith(constants.code_extensions):
-#                 return False
-#             elif file.endswith(constants.ontology_extensions):
-#                 if not ontology:
-#                     ontology = is_file_ontology(os.path.join(path_repo, file_path))
-#     return ontology
 
 
 def check_command_line(path_repo):
@@ -200,18 +173,15 @@ def check_static_websites(path_repo, repo_metadata: Result):
                     return False
     try:
         languages = repo_metadata[constants.CAT_PROGRAMMING_LANGUAGES]
-        print(languages)
         for language in languages:
             language_name = language[constants.PROP_RESULT][constants.PROP_NAME]
-            print(language_name)
             if language_name.lower() == "javascript":
                 js_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
-                print(js_size)
             elif language_name.lower() == "scss" or language_name.lower() == "css":
                 css_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
             total_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
     except Exception as e:
-        print(e)
+        logging.warning(f"Could not retrieve programming languages for static website check: {e}")
     if html_file > 0:
         if js_size > 0 and css_size == 0:
             if js_size / total_size < 0.91:

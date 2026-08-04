@@ -5,6 +5,7 @@ from pathlib import Path
 from .. import somef_cli
 from ..parser import pom_xml_parser
 from ..export import json_export
+from ..utils import constants
 
 test_data_path = str(Path(__file__).parent / "test_data") + os.path.sep
 test_data_repositories = str(Path(__file__).parent / "test_data" / "repositories") + os.path.sep
@@ -180,11 +181,21 @@ class TestCodemetaExport(unittest.TestCase):
         assert "developmentStatus" in self.json_content, "Missing developmentStatus in JSON"
 
     def test_reference_publication_url_natural_language(self):
+        # Note: this test has changed completely because we have changed the logic 
+        # of how we generate the creditText and referencePublication.
+        # This test now expects only `creditText` for this repository.
+        # """Checks that referencePublication contains a ScholarlyArticle with a URL in citation natural language"""
+        # print(self.json_content["creditText"])
+        # assert "referencePublication" in self.json_content, "Missing referencePublication in JSON"
+        # assert isinstance(self.json_content["referencePublication"], list), "referencePublication should be a list"
+        # assert any("url" in pub for pub in self.json_content["referencePublication"]), "No URL found in referencePublication"
 
-        """Checks that referencePublication contains a ScholarlyArticle with a URL in citation natural language"""
-        assert "referencePublication" in self.json_content, "Missing referencePublication in JSON"
-        assert isinstance(self.json_content["referencePublication"], list), "referencePublication should be a list"
-        assert any("url" in pub for pub in self.json_content["referencePublication"]), "No URL found in referencePublication"
+        """Checks that software is correctly credited in creditText"""
+        assert "referencePublication" not in self.json_content or not self.json_content["referencePublication"]
+        
+        assert "creditText" in self.json_content
+        assert len(self.json_content["creditText"]) > 0
+        assert "somef demo repo" in self.json_content["creditText"][0].lower()
 
     def test_date_published(self):
         """Checks that if exist the first date published"""
@@ -209,6 +220,7 @@ class TestCodemetaExport(unittest.TestCase):
 
         with open(test_data_path + "test_authors_reference.json", "r") as text_file:
             data = json.load(text_file) 
+
 
         expected_family_name = "Garijo"
         expected_given_name = "Daniel"
@@ -235,6 +247,7 @@ class TestCodemetaExport(unittest.TestCase):
 
     def test_codemeta_author_file(self):
         """Checks if codemeta file has extracted the authors in the author file"""
+        print(self.json_content["author"])
         authors = [author.get("name") for author in self.json_content["author"] if author["@type"] == "Person"]
         expected_authors = {"Daniel Garijo", "Juanje Mendoza"}
         assert set(authors) >= expected_authors, f"Mismatch in authors: {authors}"
@@ -266,13 +279,25 @@ class TestCodemetaExport(unittest.TestCase):
         text_file.close()
 
         reference_publications = json_content.get("referencePublication", [])
-
+        credit_text = json_content.get("creditText", [])
         # just one reference
+        # Now we expect 2 because the Zenodo DOI (software) and the 
+        # scientific publication DOI are correctly identified as distinct entities.
+        # new changes again. Now we expect 1 because the scientific publication DOI is correctly identified as the main reference. 
+        # The software is correctly included in the creditText using its Zenodo DOI.
         assert len(reference_publications) == 1, f"Expected 1 referencePublication, found {len(reference_publications)}"
 
         # reference with doi expected
+        # assert reference_publications[0].get("identifier") == "10.5281/zenodo.5907936", \
+        #     f"Expected identifier '10.5281/zenodo.5907936', found '{reference_publications[0].get('identifier')}'"
         assert reference_publications[0].get("identifier") == "10.1145/3524842.3528497", \
             f"Expected identifier '10.1145/3524842.3528497', found '{reference_publications[0].get('identifier')}'"
+
+        assert len(credit_text) == 1, f"Expected 1 creditText entry, found {len(credit_text)}"
+        
+        expected_credit = "Filgueira, R., Garijo, D. (inspect4py: a knowledge extraction framework for python code repositories). 10.5281/zenodo.5907936. Available at: https://github.com/SoftwareUnderstanding/inspect4py"
+        assert credit_text[0] == expected_credit, \
+            f"Expected creditText '{expected_credit}', found '{credit_text[0]}'"
         os.remove(json_file_path)
 
     def test_codemeta_duplicate_dois(self):
@@ -332,7 +357,6 @@ class TestCodemetaExport(unittest.TestCase):
             json_content = json.load(f)
 
         requirements = json_content.get("softwareRequirements", [])
-
         assert all(isinstance(req, dict) and "name" in req for req in requirements), \
             f"Expected only structured requirements, found: {requirements}"
 
@@ -423,7 +447,7 @@ class TestCodemetaExport(unittest.TestCase):
         Checks runtime in codemeta file
         """
 
-        pom_xml_parser.processed_pom = False
+        # pom_xml_parser.processed_pom = False
 
         output_path = test_data_path + 'test_codemeta_widoco_runtime_platform.json'
         if os.path.exists(output_path):
@@ -475,6 +499,7 @@ class TestCodemetaExport(unittest.TestCase):
         text_file.close()
 
         authors = json_content.get("author", [])
+
         assert len(authors) == 9, f"Expected 9 author, found {len(authors)}"
         assert authors[0].get("name") == "Robert Huber", "Second author must be Robert Huber"
         assert authors[1].get("email") == "anusuriya.devaraju@googlemail.com", \
@@ -506,19 +531,20 @@ class TestCodemetaExport(unittest.TestCase):
         json_content = json.loads(data)
         issue_tracker = json_content["issueTracker"]  # JSON is in Codemeta format
      
-        #len(json_content["citation"]) 
-        #codemeta category citation is now referencePublication
+
+        # buildInstructions was previously generated from the header "Browser issues (Why can't I see
+        # the generated documentation / visualization?)" which was incorrectly classified as documentation
+        # due to the word "documentation" in the header. This was a false positive fixed in issue #529
+        # (long headers with punctuation are now discarded), so buildInstructions is no longer expected here.
+        # len(json_content["buildInstructions"]) > 0 and 
         assert issue_tracker == 'https://github.com/dgarijo/Widoco/issues' and len(json_content["referencePublication"]) > 0 and \
             len(json_content["name"]) > 0 and len(json_content["identifier"]) > 0 and \
             len(json_content["description"]) > 0 and len(json_content["readme"]) > 0 and \
-            len(json_content["buildInstructions"]) > 0 and \
             len(json_content["softwareRequirements"]) > 0 and len(json_content["programmingLanguage"]) > 0 and \
             len(json_content["keywords"]) > 0 and len(json_content["logo"]) > 0 and \
             len(json_content["license"]) > 0 and len(json_content["dateCreated"]) > 0
         
         os.remove(test_data_path + "test-417.json-ld")
-
-
 
     def test_issue_723_codemeta(self):
             """
@@ -589,6 +615,352 @@ class TestCodemetaExport(unittest.TestCase):
         os.remove(output_path)
 
 
+    def test_issue_886_apache_code(self):
+        """Checks whether copyright holder are correctly extracted from Apache license text in codemeta"""
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "Widoco",
+                            doc_src=None,
+                            in_file=None,
+                            output=None,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=test_data_path + "test_issue_886_apache_code.json",
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_886_apache_code.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+
+        copyright_holder = json_content[constants.CAT_CODEMETA_COPYRIGHTHOLDER]
+        copyright_year = json_content[constants.CAT_CODEMETA_COPYRIGHTYEAR]
+    
+        assert copyright_holder == "Daniel Garijo, Information Sciences Institute, USC."
+        assert copyright_year == "2016"
+
+        os.remove(test_data_path + "test_issue_886_apache_code.json")
+
+
+
+    def test_issue_936_contributors(self):
+        """Checks whether contributors are correctly extracted from the repository"""
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "codemeta_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output=None,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=test_data_path + "test_issue_936_contributors.json",
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_936_contributors.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+
+        contributors = json_content[constants.CAT_CODEMETA_CONTRIBUTOR]
+        self.assertTrue(any(
+            c["name"] == "Abby Cabunoc Mayes" and
+            c.get("givenName") == "Abby Cabunoc"
+            for c in contributors
+        ),
+        "Expected contributor Abby Cabunoc Mayes with givenName='Abby Cabunoc' not found")
+
+        self.assertTrue(any(
+            c["name"] == "Arfon Smith" and
+            c.get("@id") == "http://orcid.org/0000-0002-3957-2474"
+            for c in contributors
+        ),
+        "Expected contributor Arfon Smith with @id='http://orcid.org/0000-0002-3957-2474' not found")
+
+        self.assertTrue(any(
+            c["name"] == "Dan Katz" and
+            c.get("email") == "dskatz@illinois.edu"
+            for c in contributors
+        ),
+        "Expected contributor Dan Katz with email='dskatz@illinois.edu' not found")
+
+        os.remove(test_data_path + "test_issue_936_contributors.json")
+        
+
+
+    def test_issue_960_funding(self):
+        """Checks whether funding and funder information are correctly extracted and exported to CodeMeta"""
+        output_path = test_data_path + "test_issue_960_funding.json"
+
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "codemeta_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output=None,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=output_path,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(output_path, "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+
+        expected_funding = "1549758; Codemeta: A Rosetta Stone for Metadata in Scientific Software"
+        self.assertEqual(json_content.get("funding"), expected_funding, 
+                        f"Expected funding '{expected_funding}' not found in exported CodeMeta")
+
+        funder = json_content.get("funder") 
+        self.assertIsNotNone(funder, "Funder field missing in exported CodeMeta")
+        
+        if isinstance(funder, dict):
+            self.assertEqual(funder.get("name"), "National Science Foundation", "Funder name mismatch")
+            self.assertEqual(funder.get("@id"), "https://doi.org/10.13039/100000001", "Funder @id mismatch")
+        else:
+            self.assertEqual(funder, "National Science Foundation", "Funder name mismatch")
+
+        os.remove(output_path)
+
+
+    def test_issue_953_publication_reconciliation_codemeta(self):
+        """Checks that citations are correctly separated in the CodeMeta output as referencePublication and creditText"""
+
+        output_path = test_data_path + "test_issue_953_publication_reconciliation_codemeta.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "somef_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output= None,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=output_path,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+        
+        referencePublication = json_content[constants.CAT_CODEMETA_REFERENCEPUBLICATION]
+        creditText = json_content.get(constants.CAT_CODEMETA_CREDITTEXT, [])
+
+        assert len(referencePublication) == 2, f"Expected 2 publications, found {len(referencePublication)}"
+        
+        qss_pub = next((p for p in referencePublication if p.get("identifier") == "10.1162/qss_a_00167"), None)
+        assert qss_pub is not None, "QSS publication not found in referencePublication"
+        assert qss_pub["@type"] == "ScholarlyArticle"
+        assert qss_pub["name"] == "A Framework for Creating Knowledge Graphs of Scientific Software Metadata"
+
+        ieee_pub = next((p for p in referencePublication if p.get("identifier") == "10.1109/BigData47090.2019.9006447"), None)
+        assert ieee_pub is not None, "IEEE publication not found in referencePublication"
+        assert ieee_pub["@type"] == "ScholarlyArticle"
+        assert "SoMEF" in ieee_pub["name"]
+
+  
+        assert len(creditText) > 0, "creditText list should not be empty"
+        assert any("somef: software metadata extraction framework" in c.lower() for c in creditText), \
+            "Software citation not found in creditText"
+
+        print("Test passed successfully: referencePublication and creditText content verified.")
+        
+        os.remove(output_path)
+
+    def test_author_organization_issue_983(self):
+        """
+        Checks that when a repository has an organization as owner (GitHub) and an author declared
+        in pyproject.toml, both are merged into a single author entry with name, email, @id and identifier.
+        """
+        output_path = test_data_path + 'test_codemeta_sunpy_author.json'
+
+        somef_cli.run_cli(threshold=0.9,
+                        ignore_classifiers=False,
+                        repo_url=None,
+                        doc_src=None,
+                        local_repo=test_data_repositories + "sunpy",
+                        in_file=None,
+                        output=None,
+                        graph_out=None,
+                        graph_format="turtle",
+                        codemeta_out=output_path,
+                        pretty=True,
+                        missing=False,
+                        requirements_mode="all")
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        authors = json_content.get("author", [])
+
+        assert len(authors) == 1, f"Expected a single merged author entry, found {len(authors)}: {authors}"
+
+        author = authors[0]
+
+        assert author.get("@type") == "Organization", f"Expected @type 'Organization', got: {author.get('@type')}"
+
+        assert author.get("name") == "The SunPy Community", f"Expected name 'The SunPy Community', got: {author.get('name')}"
+
+        assert author.get("email") == "sunpy@googlegroups.com", f"Expected email 'sunpy@googlegroups.com', got: {author.get('email')}"
+
+        os.remove(output_path)
+
+
+    def test_schema_owner(self):
+        """Checks that organization owner is correctly exported as schema:owner with expanded context (issue #892)"""
+
+
+        assert "schema:owner" in self.json_content, "Missing schema:owner in JSON"
+        owners = self.json_content["schema:owner"]
+        assert isinstance(owners, list), "schema:owner should be a list"
+        assert any(o.get("@type") == "Organization" for o in owners), "schema:owner should contain an Organization"
+        assert any(o.get("name") == "KnowledgeCaptureAndDiscovery" for o in owners), "Expected KnowledgeCaptureAndDiscovery as owner"
+        
+        
+    def test_codemeta_sunpy_reference_publication(self):
+        """
+        Checks that a CITATION.cff with DOI, title and structured authors is exported as
+        referencePublication (not creditText) in codemeta, and that individual authors
+        are considered Person with familyName/givenName rather than @type Organization.
+        """
+        output_path = test_data_path + 'test_codemeta_sunpy_refpub.json'
+
+        somef_cli.run_cli(threshold=0.9,
+                        ignore_classifiers=False,
+                        repo_url=None,
+                        doc_src=None,
+                        local_repo=test_data_repositories + "sunpy",
+                        in_file=None,
+                        output=None,
+                        graph_out=None,
+                        graph_format="turtle",
+                        codemeta_out=output_path,
+                        pretty=True,
+                        missing=False,
+                        requirements_mode="all")
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        ref_pub = json_content.get(constants.CAT_CODEMETA_REFERENCEPUBLICATION, [])
+        # print(f"Reference publications: {ref_pub}")
+        assert len(ref_pub) > 0, "Expected referencePublication entries"
+        assert ref_pub[0].get("@type") == "ScholarlyArticle"
+
+        found_person = False
+        for pub in ref_pub:
+            for author in pub.get("author", []):
+                if author.get("@type") == "Person":
+                    assert "familyName" in author
+                    assert "givenName" in author
+                    found_person = True
+
+        assert found_person, "No Person-type author found with familyName/givenName"
+
+        os.remove(output_path)
+
+    def test_issue_1015_application_category(self):
+        """Checks that applicationCategory is present in codemeta output"""
+        output_path = test_data_path + 'test_application_category.json'
+
+        somef_cli.run_cli(threshold=0.8,
+                        ignore_classifiers=False,
+                        repo_url=None,
+                        local_repo=test_data_repositories + "aladin-lite",
+                        doc_src=None,
+                        in_file=None,
+                        output=None,
+                        graph_out=None,
+                        graph_format="turtle",
+                        codemeta_out=output_path,
+                        pretty=True,
+                        missing=False)
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        assert "applicationCategory" in json_content, \
+            "Missing applicationCategory in codemeta output"
+        assert "Astronomy, Visualization" in json_content["applicationCategory"], \
+            f"Expected 'Astronomy, Visualization' in applicationCategory, got {json_content['applicationCategory']}"
+
+        os.remove(output_path)
+
+
+    def test_issue_1025_orcid(self):
+       
+        """
+        Checks that an ORCID present in the extracted citation data (e.g., from CITATION.cff)
+        is correctly propagated to the author entry in referencePublication.
+        """
+        output_path = test_data_path + 'test_codemeta_widoco_author_orcid.json'
+
+        somef_cli.run_cli(threshold=0.9,
+                          ignore_classifiers=False,
+                          repo_url=None,
+                          doc_src=None,
+                          local_repo=test_data_repositories + "Widoco",
+                          in_file=None,
+                          output=None,
+                          graph_out=None,
+                          graph_format="turtle",
+                          codemeta_out= output_path,
+                          pretty=True,
+                          missing=False,
+                          requirements_mode="v")
+        
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        reference = json_content.get(constants.CAT_CODEMETA_REFERENCEPUBLICATION, [])
+
+        expected_id = "http://orcid.org/0000-0003-0454-7145"
+
+        found = any(
+            author.get("@id") == expected_id
+            for ref in reference
+            for author in ref.get("author", [])
+        )
+
+        assert found, f"ORCID {expected_id} not found in referencePublication authors"
+
+        os.remove(output_path)
+
+
+    def test_codemeta_nemo_cff_issue_1050(self):
+        """CITATION.cff with HTML in abstract exports with unescaped quotes correctly to codemeta"""
+        output_path = test_data_path + 'test_codemeta_nemo.json'
+        somef_cli.run_cli(threshold=0.8,
+                        ignore_classifiers=False,
+                        repo_url=None,
+                        local_repo=test_data_repositories + "nemo",
+                        output=None,
+                        codemeta_out=output_path,
+                        pretty=True,
+                        readme_only=False)
+
+        with open(output_path) as f:
+            json_content = json.load(f)
+
+        credit_text = json_content.get(constants.CAT_CODEMETA_CREDITTEXT, [])
+        assert len(credit_text) > 0
+        assert any("NEMO" in ct.upper() for ct in credit_text)
+        assert any("BARNES" in ct.upper() for ct in credit_text)
+
+        os.remove(output_path)
+
+
     @classmethod
     def tearDownClass(cls):
         """delete temp file JSON just if all the test pass"""
@@ -599,6 +971,8 @@ class TestCodemetaExport(unittest.TestCase):
             except Exception as e:
                 print(f"Failed to delete {cls.json_file}: {e}")  
 
-
+    
 if __name__ == "__main__":
     unittest.main()
+ 
+    

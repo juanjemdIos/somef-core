@@ -1,13 +1,8 @@
 import unittest
 import os
 from pathlib import Path
-
-# from ..extract_software_type import check_ontologies, check_notebooks, check_command_line, check_extras, \
-#     check_static_websites, check_workflow
-
 from ..extract_software_type import check_notebooks, check_command_line, check_extras, \
     check_static_websites, check_workflow
-
 test_data_repositories = str(Path(__file__).parent / "test_data" / "repositories") + os.path.sep
 
 
@@ -18,15 +13,15 @@ class TestEXTRAS(unittest.TestCase):
         e.g: test_true_ontology runs the check_ontologies function on auroral-ontology-core which 
         is an ontology and returns true so the assert passes."""
 
-    # def test_true_ontology(self):
-    #     path = test_data_repositories + "auroral-ontology-core"
-    #     result = check_ontologies(path)
-    #     assert result
-
-    # def test_false_ontology(self):
-    #     path = test_data_repositories + "sprint-main"
-    #     result = check_ontologies(path)
-    #     assert (result is False)
+#     def test_true_ontology(self):
+#         path = test_data_repositories + "auroral-ontology-core"
+#         result = check_ontologies(path)
+#         assert result
+# 
+#     def test_false_ontology(self):
+#         path = test_data_repositories + "sprint-main"
+#         result = check_ontologies(path)
+#         assert (result is False)
 
     def test_true_notebooks(self):
         path = test_data_repositories + "basis_functions_approach_to_GP-master"

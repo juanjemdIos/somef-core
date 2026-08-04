@@ -6,7 +6,6 @@ import yaml
 import string
 from urllib.parse import urlparse
 from .utils import constants
-# from . import extract_workflows, extract_ontologies
 from . import extract_workflows
 from .process_results import Result
 from .regular_expressions import detect_license_spdx, extract_scholarly_article_natural, extract_scholarly_article_properties
@@ -26,6 +25,7 @@ from .parser.dockerfile_parser import parse_dockerfile
 from .parser.publiccode_parser import parse_publiccode_file
 from .parser.codeowners_parser import parse_codeowners_file
 from .parser.conda_environment_parser import parse_conda_environment_file
+from .parser.setupcfg_parser import parse_setup_cfg
 from chardet import detect
 
 
@@ -50,7 +50,6 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
     -------
     @return: text of the main readme and a JSON dictionary (filtered_resp) with the findings in files
     """
-
     global domain_gitlab
     if repo_type == constants.RepositoryType.GITLAB:      
         domain_gitlab = extract_gitlab_domain(metadata_result, repo_type)
@@ -63,14 +62,22 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
     try:
         parsed_build_files = set()
 
-        for dir_path, dir_names, filenames in os.walk(repo_dir):
+        for dir_path, dir_names, filenames in sorted(os.walk(repo_dir),key=lambda x: x[0].count(os.sep)):
+            dir_names.sort()
+            filenames.sort()   
+            # dir_names[:] = [d for d in dir_names if d.lower() not in constants.IGNORED_DIRS]
+            # if is_local_repo:
+            #     dir_names[:] = [d for d in dir_names if d.lower() != "lib"]
 
-            dir_names[:] = [d for d in dir_names if d.lower() not in constants.IGNORED_DIRS]
-            if is_local_repo:
-                dir_names[:] = [d for d in dir_names if d.lower() != "lib"]
-
+            # repo_relative_path = os.path.relpath(dir_path, repo_dir)
+            # current_dir = os.path.basename(repo_relative_path).lower()
             repo_relative_path = os.path.relpath(dir_path, repo_dir)
+            path_parts = repo_relative_path.split(os.sep)
             current_dir = os.path.basename(repo_relative_path).lower()
+            is_in_ignored = any(part.lower() in constants.IGNORED_DIRS for part in path_parts)
+            is_lib = is_local_repo and "lib" in path_parts
+            if is_in_ignored or is_lib:
+                continue
             # if this is a test folder, we ignore it (except for the root repo)
             # if ignore_test_folder and repo_relative_path != "." and "test" in repo_relative_path.lower():
             if ignore_test_folder and repo_relative_path != "." and current_dir in constants.IGNORED_DIRS:
@@ -172,11 +179,12 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                 logging.error(f"{type(err).__name__} was raised: {err}")
                 if ("LICENCE" == filename.upper() or "LICENSE" == filename.upper() or "LICENSE.MD"== filename.upper()
                         or "LICENSE.RST"== filename.upper()):
-                    metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
-                                                               repo_default_branch,
-                                                               repo_dir, repo_relative_path, filename, dir_path,
-                                                               metadata_result, constants.CAT_LICENSE)
 
+                    metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
+                                                            repo_default_branch,
+                                                            repo_dir, repo_relative_path, filename, dir_path,
+                                                            metadata_result, constants.CAT_LICENSE)
+                    
                 if "CODE_OF_CONDUCT" == filename.upper() or "CODE_OF_CONDUCT.MD" == filename.upper():
                     metadata_result = get_file_content_or_link(repo_type, file_path, owner, repo_name,
                                                                repo_default_branch,
@@ -231,7 +239,6 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                    constants.PROP_TYPE: constants.URL
                                                }, 1, constants.TECHNIQUE_FILE_EXPLORATION
                                                )
-
                 if filename.upper() == constants.CODEOWNERS_FILE:
                     # codeowners_json = parse_codeowners_structured(dir_path,filename)
                     logging.info("Processing CODEOWNERS file...")
@@ -250,13 +257,16 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                     codemeta_file_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, repo_dir, repo_relative_path, filename)
                     metadata_result = parse_codemeta_json_file(os.path.join(dir_path, filename), metadata_result, codemeta_file_url)
                     parsed_build_files.add(filename.lower())
+                    
 
                 if filename.lower() == "pom.xml" or filename.lower() == "package.json" or \
                         filename.lower() == "pyproject.toml" or filename.lower() == "setup.py" or filename.endswith(".gemspec") or \
                         filename.lower() == "requirements.txt" or filename.lower() == "bower.json" or filename == "DESCRIPTION" or \
                         (filename.lower() == "environment.yml" or filename.lower() == "environment.yaml") or \
+                        (filename.lower() == ".zenodo.json") or \
                         (filename.lower() == "cargo.toml" and repo_relative_path == ".") or (filename.lower() == "composer.json" and repo_relative_path == ".") or \
-                        (filename == "Project.toml" or (filename.lower()== "publiccode.yml" or filename.lower()== "publiccode.yaml") and repo_relative_path == "."):
+                        (filename == "Project.toml" or (filename.lower()== "publiccode.yml" or filename.lower()== "publiccode.yaml") and repo_relative_path == ".") or \
+                        filename.lower() == "setup.cfg":
                         if filename.lower() in parsed_build_files and repo_relative_path != ".":
                             logging.info(f"Ignoring secondary {filename} in {dir_path}")
                             continue
@@ -273,7 +283,6 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                },
                                                1,
                                                constants.TECHNIQUE_FILE_EXPLORATION, build_file_url)
-                        logging.info(f"############### (NEW UPDATE) Processing package file: {filename} ############### ")
                         if filename.lower() == "pom.xml":
                             metadata_result = parse_pom_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "package.json":
@@ -297,13 +306,16 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                         if filename.lower() == "publiccode.yml" or filename.lower() == "publiccode.yaml":
                             metadata_result = parse_publiccode_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         if filename.lower() == "environment.yml" or filename.lower() == "environment.yaml":
-                            print("Processing conda environment file...")
                             metadata_result = parse_conda_environment_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
-
+                        if filename.lower() == "setup.cfg":
+                            metadata_result = parse_setup_cfg(os.path.join(dir_path, filename), metadata_result, build_file_url)
+                        # if filename.lower() == ".zenodo":
+                        #     metadata_result = parse_zenodo_file(os.path.join(dir_path, filename), metadata_result, build_file_url)
                         parsed_build_files.add(filename.lower())
                           
                 # if repo_type == constants.RepositoryType.GITLAB: 
                 if filename.endswith(".yml"):
+                    category = None
                     if repo_type == constants.RepositoryType.GITLAB: 
                         analysis = extract_workflows.is_file_continuous_integration_gitlab(os.path.join(repo_dir, file_path))                  
                         if analysis:
@@ -321,20 +333,29 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                                     {
                                                         constants.PROP_VALUE: workflow_url,
                                                         constants.PROP_TYPE: constants.URL
-                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)        
+                                                    }, 1, constants.TECHNIQUE_FILE_EXPLORATION)     
+                    elif repo_type == constants.RepositoryType.CODEBERG:
+                        if (file_path.startswith(".forgejo/workflows/") or file_path.startswith(".gitea/workflows/")):
+                            category = constants.CAT_CONTINUOUS_INTEGRATION
+                        else:
+                            category = None 
+                    elif repo_type == constants.RepositoryType.BITBUCKET:
+                        if os.path.basename(file_path) == "bitbucket-pipelines.yml":
+                            category = constants.CAT_CONTINUOUS_INTEGRATION
+                        else:
+                            category = None
                     elif repo_type == constants.RepositoryType.GITHUB:
                         if file_path.startswith(".github/workflows/"):
                             category = constants.CAT_CONTINUOUS_INTEGRATION
                         else:
                             category = None
 
-                        if category:
-                            workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
-                                                        repo_dir, repo_relative_path, filename)
-                            metadata_result.add_result(category,
-                                                    {constants.PROP_VALUE: workflow_url, constants.PROP_TYPE: constants.URL},
-                                                    1, constants.TECHNIQUE_FILE_EXPLORATION)
-                            
+                    if category:
+                        workflow_url = get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch,
+                                                    repo_dir, repo_relative_path, filename)
+                        metadata_result.add_result(category,
+                                                {constants.PROP_VALUE: workflow_url, constants.PROP_TYPE: constants.URL},
+                                                1, constants.TECHNIQUE_FILE_EXPLORATION)      
                 if filename.endswith(".ga") or filename.endswith(".cwl") or filename.endswith(".nf") or (
                         filename.endswith(".snake") or filename.endswith(
                     ".smk") or "Snakefile" == filename_no_ext) or filename.endswith(".knwf") or filename.endswith(
@@ -352,8 +373,10 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                         
             if 'citation' in metadata_result.results:
                 for cit in metadata_result.results['citation']:
-                    scholarly_article = {}
                     result = cit.get(constants.PROP_RESULT, {})
+
+                    scholarly_article = {}
+                    # result = cit.get(constants.PROP_RESULT, {})
                     value = result.get(constants.PROP_VALUE, '')
                     if re.search(r'@\w+\{', value):  
                         scholarly_article = extract_scholarly_article_properties(value, scholarly_article, 'JSON')
@@ -381,6 +404,10 @@ def process_repository_files(repo_dir, metadata_result: Result, repo_type, owner
                                 docs_url = f"https://github.com/{owner}/{repo_name}/tree/{urllib.parse.quote(repo_default_branch)}/{docs_path}"
                             elif repo_type == constants.RepositoryType.GITLAB:
                                 docs_url = f"https://{domain_gitlab}/{owner}/{repo_name}/-/tree/{urllib.parse.quote(repo_default_branch)}/{docs_path}"
+                            elif repo_type == constants.RepositoryType.CODEBERG:
+                                docs_url = f"https://codeberg.org/{owner}/{repo_name}/src/branch/{urllib.parse.quote(repo_default_branch)}/{docs_path}"
+                            elif repo_type == constants.RepositoryType.BITBUCKET:
+                                docs_url = f"https://bitbucket.org/{owner}/{repo_name}/src/{urllib.parse.quote(repo_default_branch)}/{docs_path}"
                             else:
                                 docs_url = os.path.join(repo_dir, docs_path)
                             # docs.append(docs_url)
@@ -420,6 +447,10 @@ def get_file_link(repo_type, file_path, owner, repo_name, repo_default_branch, r
         return convert_to_raw_user_content_github(file_path, owner, repo_name, repo_default_branch)
     elif repo_type == constants.RepositoryType.GITLAB:
         return convert_to_raw_user_content_gitlab(file_path, owner, repo_name, repo_default_branch)
+    elif repo_type == constants.RepositoryType.CODEBERG:
+        return convert_to_raw_user_content_codeberg(file_path, owner, repo_name, repo_default_branch)
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        return convert_to_raw_user_content_bitbucket(file_path, owner, repo_name, repo_default_branch)
     else:
         return os.path.join(repo_dir, repo_relative_path, filename)
 
@@ -462,13 +493,26 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                             entry[constants.PROP_TECHNIQUE] is constants.TECHNIQUE_FILE_EXPLORATION):
                         new_file_path = extract_directory_path(url)
                         existing_path = extract_directory_path(entry[constants.PROP_SOURCE])
-                        if new_file_path.startswith(existing_path):
-                            # the existing file is higher, ignore this one
+
+                        if new_file_path != existing_path and new_file_path.startswith(existing_path):
                             return metadata_result
-                        else:
-                            # replace result in hierarchy (below)
-                            replace = True
-                        break
+                        # if new_file_path.startswith(existing_path):
+                        #     # the existing file is higher, ignore this one
+                        #     return metadata_result
+                        # if existing_path == new_file_path:
+                        #     return metadata_result
+                        
+                        # if (category == constants.CAT_CITATION and existing_path == "." and new_file_path != "."):
+                        #     return metadata_result
+
+                        # replace = True
+                        # break
+                        # if repo_relative_path != "." and category == constants.CAT_LICENSE:
+                        #     return metadata_result 
+                        # else:
+                        #     # replace result in hierarchy (below)
+                        #     replace = True
+                        # break
     except Exception as e:
         logging.warning("Error when trying to determine if redundant files exist " + str(e))
     try:
@@ -479,12 +523,49 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                 constants.PROP_VALUE: file_text,
                 constants.PROP_TYPE: constants.FILE_DUMP
             }
+
             if category is constants.CAT_LICENSE:
                 license_text = file_text
                 license_info = detect_license_spdx(license_text, 'JSON')
+             
                 if license_info:
                     result[constants.PROP_NAME] = license_info['name']
                     result[constants.PROP_SPDX_ID] = license_info['spdx_id']
+                    if '@id' in license_info:
+                        result[constants.PROP_URL] = license_info['@id']
+                        result[constants.PROP_IDENTIFIER] = license_info['@id']
+
+                # Extraction copyright holder from license text
+                matches_copyright = re.findall(constants.REGEXP_COPYRIGHT, license_text, flags=re.IGNORECASE)
+
+                for year, holder in matches_copyright:
+
+                    holder = holder.strip() if holder else None
+                    year = year.strip() if year else None
+
+                    if not holder:
+                        logging.info("Skipping copyright holder with empty name")
+                        continue
+
+                    # sometimes we get not desired characters
+                    holder = holder.lstrip(",;: ").strip()
+
+                    result_copy = {
+                        constants.PROP_VALUE: holder,
+                        constants.PROP_TYPE: constants.AGENT
+                    }
+
+                    if year:
+                        result_copy[constants.PROP_YEAR] = year
+
+                    logging.info(f"Extracted copyright holder: {holder.strip()} with year: {year}")
+                    metadata_result.add_result(
+                        constants.CAT_COPYRIGHT,
+                        result_copy,
+                        1,
+                        constants.TECHNIQUE_FILE_EXPLORATION,
+                        url
+                    )
 
             if category is constants.CAT_AUTHORS:
                 result = {}
@@ -514,70 +595,56 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                         ) 
             # Properties extraction from cff
             if format_result == 'cff':
-                yaml_content = yaml.safe_load(file_text)
-                preferred_citation = yaml_content.get("preferred-citation", {})
-                doi = yaml_content.get("doi") or preferred_citation.get("doi")
-                identifiers = yaml_content.get("identifiers", [])
-                url_citation = preferred_citation.get("url") or yaml_content.get("url")
+                try:
+                    yaml_content = yaml.safe_load(file_text)
+                except Exception:
+                    cleaned = re.sub(constants.REGEXP_CLEAN_HTML_TAGS, '', file_text)
+                    try:
+                        yaml_content = yaml.safe_load(cleaned)
+                    except Exception:
+                        yaml_content = None
 
-                if identifiers:
-                    result[constants.CAT_IDENTIFIER] = identifiers
+                if yaml_content:
+                    license_value = yaml_content.get("license")
+                    version_value = yaml_content.get("version")
 
-                identifier_url = next((id["value"] for id in identifiers if id["type"] == "url"), None)
-                identifier_doi = next((id["value"] for id in identifiers if id["type"] == "doi"), None)
+                    logging.info(f"Extracted license value from CFF: {license_value}")
+                    if license_value:
+                        if isinstance(license_value, list):
+                            license_value = license_value[0]
+                        parse_license_cff(license_value, metadata_result, url)
 
-                title = yaml_content.get("title") or preferred_citation.get("title", None)
-                authors = yaml_content.get("authors", [])
+                    logging.info(f"Extracted version value from CFF: {version_value}")
+                    if version_value:
+                        if isinstance(version_value, list):
+                            version_value = version_value[0]
+                        parse_version_cff(version_value, metadata_result, url)
 
-                if identifier_doi:
-                    final_url = f"https://doi.org/{identifier_doi}"
-                elif doi:
-                    final_url = f"https://doi.org/{doi}"
-                elif identifier_url:
-                    final_url = identifier_url
-                elif url_citation:
-                    final_url = url_citation
-                else:
-                    final_url = ''
+                    root_result = parse_cff_root(yaml_content)
+                    clean_yaml = dict(yaml_content)
+                    clean_yaml.pop("preferred-citation", None)
+                    root_result[constants.PROP_VALUE] = yaml.dump(
+                        clean_yaml, sort_keys=False, allow_unicode=True
+                    )
+                    # root_result[constants.PROP_VALUE] = file_text
+                    # root_result[constants.PROP_TYPE] = constants.FILE_DUMP
+                    metadata_result.add_result(
+                        category, root_result, 1,
+                        constants.TECHNIQUE_FILE_EXPLORATION, url
+                    )
 
-                author_list = []
-                for author in authors:
-                    family_name = author.get("family-names")
-                    given_name = author.get("given-names")
-                    orcid = author.get("orcid")
-                    name = author.get("name")
+                    pref = yaml_content.get("preferred-citation")
+                    if pref and not should_skip_citation(metadata_result, url):
+                        pref_result = parse_cff_preferred(pref)
+                        pref_result[constants.PROP_VALUE] = yaml.dump({"preferred-citation": pref}, default_flow_style=False)
+                        # pref_result[constants.PROP_TYPE] = constants.FILE_DUMP
+                        metadata_result.add_result(
+                            constants.CAT_CITATION, pref_result, 1,
+                            constants.TECHNIQUE_FILE_EXPLORATION, url
+                        )
 
-                    if family_name and given_name:
-                        author_entry = {
-                            "type": "Agent",
-                            "name": f"{given_name} {family_name}",
-                            "family_name": family_name,
-                            "given_name": given_name
-                        }
-                        if orcid:
-                            if not orcid.startswith("http"):  # check if is a url
-                                orcid = f"https://orcid.org/{orcid}"
-                            author_entry["url"] = orcid
-                    elif name:
-                        # If there is only a name, we assume this to be an Organization.
-                        # it could be not enough acurate
-
-                        author_entry = {
-                            "type": "Agent",
-                            "name": name
-                        }
-                    
-                    author_list.append({k: v for k, v in author_entry.items() if v is not None})
-
-                if author_list:
-                    result[constants.PROP_AUTHOR] = author_list
-                if title:
-                    result[constants.PROP_TITLE] = title
-                if final_url:
-                    result[constants.PROP_URL] = final_url
-                if doi:
-                    result[constants.PROP_DOI] = doi
-
+                    return metadata_result
+  
             if format_result != "":
                 result[constants.PROP_FORMAT] = format_result
 
@@ -585,7 +652,8 @@ def get_file_content_or_link(repo_type, file_path, owner, repo_name, repo_defaul
                 metadata_result.edit_hierarchical_result(category, result, 1, constants.TECHNIQUE_FILE_EXPLORATION, url)
             else:
                 metadata_result.add_result(category, result, 1, constants.TECHNIQUE_FILE_EXPLORATION, url)
-    except:
+    except Exception as e:
+        logging.error(f"Error occurred while processing file {url}: {e}")
         if replace:
             metadata_result.edit_hierarchical_result(category,
                                                      {
@@ -630,6 +698,24 @@ def convert_to_raw_user_content_github(partial, owner, repo_name, repo_ref):
     return f"https://raw.githubusercontent.com/{owner}/{repo_name}/{repo_ref}/{urllib.parse.quote(partial)}"
 
 
+def convert_to_raw_user_content_codeberg(partial, owner, repo_name, repo_ref):
+    """Converts Codeberg paths into raw content URLs"""
+    if partial.startswith("./"):
+        partial = partial.replace("./", "")
+    if partial.startswith(".\\"):
+        partial = partial.replace(".\\", "")
+    return f"https://codeberg.org/{owner}/{repo_name}/raw/branch/{repo_ref}/{urllib.parse.quote(partial)}"
+
+
+def convert_to_raw_user_content_bitbucket(partial, owner, repo_name, repo_ref):
+    """Converts Bitbucket paths into raw content URLs"""
+    if partial.startswith("./"):
+        partial = partial.replace("./", "")
+    if partial.startswith(".\\"):
+        partial = partial.replace(".\\", "")
+    return f"https://bitbucket.org/{owner}/{repo_name}/raw/{repo_ref}/{urllib.parse.quote(partial)}"
+
+
 def convert_to_raw_user_content_gitlab(partial, owner, repo_name, repo_ref):
     """Converts GitLab paths into raw.githubuser content URLs, accessible by users"""
     if partial.startswith("./"):
@@ -650,6 +736,7 @@ def extract_gitlab_domain(metadata_result, repo_type):
             return domain
     return None  
 
+
 def clean_text(text):
     cleaned_lines = []
     for line in text.splitlines():
@@ -658,3 +745,147 @@ def clean_text(text):
             cleaned_lines.append(line)
     return "\n".join(cleaned_lines)
 
+
+def parse_authors_citation(author_list):
+    authors = []
+    for author in author_list:
+        family = author.get("family-names")
+        given = author.get("given-names")
+        orcid = author.get("orcid")
+        name = author.get(constants.PROP_NAME)
+
+        if family and given:
+            entry = {
+                constants.PROP_TYPE: "Agent",
+                constants.PROP_NAME: f"{given} {family}",
+                constants.PROP_FAMILY_NAME: family,
+                constants.PROP_GIVEN_NAME: given
+            }
+            if orcid:
+                if not orcid.startswith("http"):
+                    orcid = f"https://orcid.org/{orcid}"
+                entry[constants.PROP_URL] = orcid
+        elif name:
+            entry = {
+                constants.PROP_TYPE: "Agent",
+                constants.PROP_NAME: name
+            }
+        else:
+            continue
+
+        authors.append(entry)
+
+    return authors
+
+
+def parse_cff_root(yaml_content):
+    result = {}
+
+    result[constants.PROP_TITLE] = yaml_content.get("title")
+    result[constants.PROP_AUTHOR] = parse_authors_citation(yaml_content.get("authors", []))
+    # result[constants.PROP_VERSION] = yaml_content.get("version")
+    result[constants.PROP_DOI] = yaml_content.get("doi")
+    result[constants.PROP_URL] = yaml_content.get("url")
+    result[constants.PROP_TYPE] = constants.SOFTWARE_APPLICATION
+    # cff_type = yaml_content.get("type")
+    # result[constants.PROP_TYPE] = cff_type if cff_type else constants.FILE_DUMP
+
+    identifiers = yaml_content.get("identifiers", [])
+    if identifiers:
+        result[constants.PROP_IDENTIFIER] = identifiers
+
+    result[constants.PROP_FORMAT] = "cff"
+
+    return clean_nulls(result)
+
+def parse_cff_preferred(pref):
+    result = {}
+
+    result[constants.PROP_TITLE] = pref.get("title")
+    result[constants.PROP_AUTHOR] = parse_authors_citation(pref.get("authors", []))
+    result[constants.PROP_DOI] = pref.get("doi")
+    result[constants.PROP_URL] = pref.get("url")
+    result[constants.PROP_JOURNAL] = pref.get("journal")
+    result[constants.PROP_YEAR] = pref.get("year")
+    result[constants.PROP_PAGES] = pref.get("pages")
+    result[constants.PROP_TYPE] = constants.SCHOLARLY_ARTICLE
+    # cff_type = pref.get("type")
+    # result[constants.PROP_TYPE] = cff_type if cff_type else constants.FILE_DUMP
+
+    result[constants.PROP_PREFERRED_CITATION] = "True"
+    result[constants.PROP_FORMAT] = "cff"
+
+    return clean_nulls(result)
+
+def should_skip_citation(metadata_result, new_path):
+    for entry in metadata_result.results.get(constants.CAT_CITATION, []):
+        if entry.get(constants.PROP_TECHNIQUE) != constants.TECHNIQUE_FILE_EXPLORATION:
+            continue
+
+        existing_path = extract_directory_path(entry[constants.PROP_SOURCE])
+
+        # mismo fichero
+        if existing_path == new_path:
+            return True
+
+        # ya existe uno en raíz → bloquea subcarpetas
+        if existing_path == ".":
+            return True
+
+    return False
+
+def clean_nulls(d: dict) -> dict:
+    return {k: v for k, v in d.items() if v not in (None, "")}
+
+def parse_license_cff(license_value, metadata_result, url):
+
+    try:
+        license_info = detect_license_spdx(license_value, 'JSON')
+                    
+        license_result = {
+            constants.PROP_VALUE: license_value,
+            constants.PROP_TYPE: constants.FILE_DUMP 
+        }
+
+        if license_info:
+            license_result[constants.PROP_NAME] = license_info['name']
+            license_result[constants.PROP_SPDX_ID] = license_info['spdx_id']
+
+            license_result[constants.PROP_URL] = license_info.get("@id")
+        else:
+            license_result[constants.PROP_NAME] = license_value
+
+        metadata_result.add_result(
+            constants.CAT_LICENSE,
+            license_result,
+            1,
+            constants.TECHNIQUE_FILE_EXPLORATION,
+            url
+        )
+
+    except Exception as e:
+        logging.error(f"Error parsing license from CFF: {str(e)}")
+
+
+def parse_version_cff(version_value, metadata_result, url):
+    """
+    Parses the version from a CFF file and adds it to the global version metadata.
+    """
+    try:
+
+        version_result = {
+            constants.PROP_VALUE: str(version_value),
+            constants.PROP_TYPE: "String" 
+            
+        }
+
+        metadata_result.add_result(
+            constants.CAT_VERSION,
+            version_result,
+            1, 
+            constants.TECHNIQUE_FILE_EXPLORATION,
+            url
+        )
+
+    except Exception as e:
+        logging.error(f"Error parsing version from CFF: {str(e)}")

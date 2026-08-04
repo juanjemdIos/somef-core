@@ -179,7 +179,7 @@ def parse_package_json_file(file_path, metadata_result: Result, source):
                             "value": req,
                             "name": name,
                             "version": version,
-                            "type": constants.SOFTWARE_APPLICATION,
+                            "type": constants.SOFTWARE_DEPENDENCY,
                             "dependency_type": dep_type,
                             "dependency_resolver": "npm"
                         },
@@ -257,6 +257,13 @@ def parse_runtime_platform_from_package_json(data):
             }
             if version_value:
                 run["version"] = version_value.strip()
+
+            # if version_value:
+            #     # runtimes.append({
+            #     #     "name": runtime_name.capitalize(),
+            #     #     "version": version_value.strip()
+            #     # })
+            #     run["version"]=  version_value.strip()
             
             runtimes.append(run)  
     

@@ -8,6 +8,7 @@ import validators
 from .utils import constants
 from .process_results import Result
 from urllib.parse import urlparse
+from .parser.authors_parser import parse_bibtex_authors
 
 import bibtexparser
 
@@ -180,6 +181,31 @@ def extract_support_channels(readme_text, repository_metadata: Result, readme_so
 
     return repository_metadata
 
+def extract_license_badges(readme_text, repository_metadata, readme_source):
+    """
+    Extracts license information from choosealicense.com URLs found in README badges.
+    """
+    matches = re.finditer(constants.REGEXP_CHOOSE_LICENSE, readme_text)
+    for match in matches:
+        license_url = match.group(0)  # full URL
+        license_info = detect_license_spdx(license_url, 'HEADER')
+        if license_info:
+            result = {
+                constants.PROP_VALUE: license_info['spdx_id'],
+                constants.PROP_TYPE: constants.PROP_LICENSE,
+                constants.PROP_NAME: license_info['name'],
+                constants.PROP_SPDX_ID: license_info['spdx_id'],
+                constants.PROP_URL: license_info['url'],
+                constants.PROP_IDENTIFIER: license_info['url'],
+            }
+            repository_metadata.add_result(
+                constants.CAT_LICENSE,
+                result,
+                1,
+                constants.TECHNIQUE_REGULAR_EXPRESSION,
+                readme_source
+            )
+    return repository_metadata
 
 def extract_repo_status(unfiltered_text, repository_metadata: Result, readme_source) -> Result:
     """
@@ -194,17 +220,22 @@ def extract_repo_status(unfiltered_text, repository_metadata: Result, readme_sou
 
     repo_status = ""
     init = unfiltered_text.find("[![Project Status:")
-    if init > 0:
+    if init >= 0:
         end = unfiltered_text.find("](", init)
-        repo_status = unfiltered_text[init + 3:end]
-        repo_status = repo_status.replace("Project Status: ", "")
-        short_status = repo_status[0:repo_status.find(" ")].lower()
+
+        start_badge_url = end + 2
+        end_badge_url = unfiltered_text.find(")", start_badge_url)
+        badge_url = unfiltered_text[start_badge_url:end_badge_url]
+        short_status = badge_url.split("/")[-1].replace(".svg", "").lower()
+        # short_status = "active"
+
         repository_metadata.add_result(constants.CAT_STATUS,
                                        {
                                            constants.PROP_TYPE: constants.URL,
                                            constants.PROP_VALUE: "https://www.repostatus.org/#" + short_status,
                                            constants.PROP_DESCRIPTION: repo_status
                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, readme_source)
+
     return repository_metadata
 
 
@@ -636,9 +667,16 @@ def extract_bibtex(readme_text, repository_metadata: Result, readme_source) -> R
             if constants.PROP_DOI in entry:
                 result[constants.PROP_DOI] = entry[constants.PROP_DOI]
             if constants.PROP_TITLE in entry:
-                result[constants.PROP_TITLE] = entry[constants.PROP_TITLE]
+                clean_title = entry[constants.PROP_TITLE].strip("{}")
+                result[constants.PROP_TITLE] = clean_title
             if constants.PROP_AUTHOR in entry:
-                result[constants.PROP_AUTHOR] = entry[constants.PROP_AUTHOR]
+                result[constants.PROP_AUTHOR] = parse_bibtex_authors(entry[constants.PROP_AUTHOR])
+            if constants.PROP_PAGES in entry:
+                result[constants.PROP_PAGES] = entry[constants.PROP_PAGES]
+            if constants.PROP_YEAR in entry:
+                result[constants.PROP_YEAR] = entry[constants.PROP_YEAR]
+            if constants.PROP_JOURNAL in entry:
+                result[constants.PROP_JOURNAL] = entry[constants.PROP_JOURNAL]
             if constants.PROP_URL in entry:
                 result[constants.PROP_URL] = entry[constants.PROP_URL]
             repository_metadata.add_result(constants.CAT_CITATION, result, 1,
@@ -731,6 +769,34 @@ def extract_project_homepage_badges(readme_text, repository_metadata: Result, so
     return repository_metadata
 
 
+# def extract_readthedocs_badgeds(readme_text, repository_metadata: Result, source) -> Result:
+#     """
+#     Function that takes the text of a readme file and searches if there are readthedocs badges.
+#     Parameters
+#     ----------
+#     @param readme_text: Text of the readme
+#     @param repository_metadata: Result with all the findings in the repo
+#     @param source: source file on top of which the extraction is performed (provenance)
+#     Returns
+#     -------
+#     @returns Result with the readthedocs badges found
+#     """
+#     print("--------------------------> Extracting readthedocs badges")
+#     readthedocs_badges = re.findall(constants.REGEXP_READTHEDOCS_BADGES, readme_text, re.DOTALL)
+#     print(readthedocs_badges)
+#     for doc in readthedocs_badges:
+#         print(f'Doc found: {doc}')
+#         url = doc[0] or doc[1]
+#         if url:
+#             repository_metadata.add_result(constants.CAT_DOCUMENTATION,
+#                                        {
+#                                            constants.PROP_TYPE: constants.URL,
+#                                            constants.PROP_VALUE: url
+#                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
+
+#     return repository_metadata
+
+
 def extract_readthedocs_badgeds(readme_text, repository_metadata: Result, source) -> Result:
     """
     Function that takes the text of a readme file and searches if there are readthedocs badges.
@@ -794,29 +860,6 @@ def extract_readthedocs_badgeds(readme_text, repository_metadata: Result, source
         )
 
     return repository_metadata
-
-# def extract_package_manager_badgeds(readme_text, repository_metadata: Result, source) -> Result:
-#     """
-#     Function that takes the text of a readme file and searches if there are package manager badges.
-#     Parameters
-#     ----------
-#     @param readme_text: Text of the readme
-#     @param repository_metadata: Result with all the findings in the repo
-#     @param source: source file on top of which the extraction is performed (provenance)
-#     Returns
-#     -------
-#     @returns Result with the package badges found
-#     """
-#     package_manager_badges = re.findall(constants.REGEXP_READTHEDOCS_BADGES, readme_text, re.DOTALL)
-#     for package in package_manager_badges:
-#         repository_metadata.add_result(constants.CAT_DOCUMENTATION,
-#                                        {
-#                                            constants.PROP_TYPE: constants.URL,
-#                                            constants.PROP_VALUE: package
-#                                        }, 1, constants.TECHNIQUE_REGULAR_EXPRESSION, source)
-
-
-#     return repository_metadata
 
 
 def extract_swh_badges(readme_text, repository_metadata: Result, source) -> Result:
@@ -982,27 +1025,58 @@ def detect_license_spdx(license_text, type):
     -------
     A JSON dictionary with name and spdx id
     """
-
+    match = re.search(constants.REGEXP_CHOOSE_LICENSE, license_text)
+    if match:
+        slug = match.group(1).lower().rstrip('/')
+        for license_name, license_info in constants.LICENSES_DICT.items():
+            if license_info['spdx_id'].lower() == slug:
+                spdx_id = license_info['spdx_id']
+                spdx_url = f"https://spdx.org/licenses/{spdx_id}"
+                if type == 'JSON':
+                    return {
+                        "name": license_name,
+                        "spdx_id": spdx_id,
+                        "@id": spdx_url,
+                        "url": spdx_url,
+                        "identifier": spdx_url
+                    }
+                else:
+                    return {
+                        "name": license_name,
+                        "spdx_id": spdx_id,
+                        "identifier": spdx_url,
+                        "url": spdx_url
+                    }
+            
     for license_name, license_info in constants.LICENSES_DICT.items():
         if re.search(license_info["regex"], license_text, re.IGNORECASE):
+            spdx_id = license_info['spdx_id']
+            spdx_url = f"https://spdx.org/licenses/{spdx_id}"
             if type == 'JSON':
                 return {
                     "name": license_name,
                     "spdx_id": f"{license_info['spdx_id']}",
-                    "@id": f"https://spdx.org/licenses/{license_info['spdx_id']}"
+                    "@id": spdx_url,
+                    "url": spdx_url,       
+                    "identifier": spdx_url
                 }
             else:
                 return {
                     "name": license_name,
-                    "identifier": f"https://spdx.org/licenses/{license_info['spdx_id']}"
+                    "identifier": spdx_url,
+                    "spdx_id": spdx_id,
+                    "url": spdx_url
                 }
     for license_name, license_info in constants.LICENSES_DICT.items():
         spdx_id = license_info["spdx_id"]
         if re.search(rf'\b{re.escape(spdx_id)}\b', license_text, re.IGNORECASE):
+            spdx_url = f"https://spdx.org/licenses/{spdx_id}"
             return {
                 "name": license_name,
                 "spdx_id": spdx_id,
-                "@id": f"https://spdx.org/licenses/{spdx_id}"
+                "@id": spdx_url,
+                "identifier": spdx_url,
+                "url": spdx_url
             }
     return None
 
@@ -1034,7 +1108,8 @@ def extract_scholarly_article_properties(bibtex_entry, scholarlyArticle, type):
     year_match = re.search(constants.REGEXP_YEAR, bibtex_entry)
     month_match = re.search(constants.REGEXP_MONTH, bibtex_entry)
     pages_match = re.search(constants.REGEXP_PAGES, bibtex_entry)
-    author_match = re.search(r'author\s*=\s*\{([^}]+)\}', bibtex_entry) 
+    # author_match = re.search(r'author\s*=\s*\{([^}]+)\}', bibtex_entry)
+    author_match = re.search(r'author\s*=\s*\{(.+?)\}\s*,', bibtex_entry)
     orcid_match = re.search(r'orcid\s*=\s*\{([^}]+)\}', bibtex_entry)  # Look for ORCID explícit
     note_orcid_match = re.search(r'ORCID[:\s]*([\d-]+X?)', bibtex_entry)  # Look in notes
 
@@ -1059,12 +1134,24 @@ def extract_scholarly_article_properties(bibtex_entry, scholarlyArticle, type):
         authors = author_match.group(1).split(" and ")  # Split several authors
 
         for author in authors:
-            parts = author.split(", ") 
-            if len(parts) == 2:
+            # parts = author.split(", ") 
+            # if len(parts) == 2:
+            #     family_name, given_name = parts
+            # else:
+            #     family_name = author
+            #     given_name = None  
+            match_author = re.match(r'(.+?)\s*\{(.+?)\}', author)
+            
+            if match_author:
+                given_name = match_author.group(1).strip()
+                family_name = match_author.group(2).strip()
+            elif "," in author:
+                parts = [p.strip() for p in author.split(",", 1)]
                 family_name, given_name = parts
             else:
-                family_name = author
-                given_name = None  
+                parts = author.split()
+                family_name = parts[-1]
+                given_name = " ".join(parts[:-1]) if len(parts) > 1 else None
 
             if type == 'JSON':
                 author_entry = {

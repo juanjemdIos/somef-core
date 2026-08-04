@@ -1,4 +1,4 @@
-FROM python:3.10
+FROM python:3.11
 
 RUN git clone https://github.com/SciCodes/somef-core
 
@@ -6,7 +6,7 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 
 RUN pip install poetry-plugin-shell
 
-WORKDIR "/somef_core"
+WORKDIR "/somef-core"
 
 RUN poetry install 
 

@@ -3,14 +3,15 @@ from pathlib import Path
 import json
 import sys
 import logging
+import base64
 
 from .utils import constants
 
 path = Path(__file__).parent.absolute()
-default_description = os.path.join(str(path), "models", "description.p")
-default_invocation = os.path.join(str(path), "models", "invocation.p")
-default_installation = os.path.join(str(path), "models", "installation.p")
-default_citation = os.path.join(str(path), "models", "citation.p")
+# default_description = os.path.join(str(path), "models", "description.p")
+# default_invocation = os.path.join(str(path), "models", "invocation.p")
+# default_installation = os.path.join(str(path), "models", "installation.p")
+# default_citation = os.path.join(str(path), "models", "citation.p")
 
 
 def get_configuration_file():
@@ -21,11 +22,15 @@ def get_configuration_file():
     The configuration object in JSON format
     """
     credentials_file = Path(
-        os.getenv("SOMEF_CONFIGURATION_FILE", '~/.somef/config.json')
+        os.getenv("SOMEF_CONFIGURATION_FILE", '~/.somef_core/config.json')
     ).expanduser()
     if credentials_file.exists():
         with credentials_file.open("r") as fh:
             file_paths = json.load(fh)
+        if constants.CONF_SIMILARITY_THRESHOLD not in file_paths:
+            file_paths[constants.CONF_SIMILARITY_THRESHOLD] = constants.CONF_DEFAULT_SIMILARITY_THRESHOLD
+        if constants.CONF_DOWNLOAD_LIMIT_MB not in file_paths:
+            file_paths[constants.CONF_DOWNLOAD_LIMIT_MB] = constants.SIZE_DOWNLOAD_LIMIT_MB
     else:
         sys.exit("Error: Please provide a config.json file or run somef configure.")
     return file_paths
@@ -48,12 +53,21 @@ def update_base_uri(base_uri):
             json.dump(data, fh)
 
 
-def configure(authorization="",
-              description=default_description,
-              invocation=default_invocation,
-              installation=default_installation,
-              citation=default_citation,
-              base_uri=constants.CONF_DEFAULT_BASE_URI):
+def configure(
+        # authorization="",
+        github_authorization="",
+        gitlab_authorization="",
+        codeberg_authorization="",
+        bitbucket_authorization="",
+        bitbucket_email="",
+        description=None,
+        invocation=None,
+        installation=None,
+        citation=None,
+        base_uri=constants.CONF_DEFAULT_BASE_URI,
+        similarity_threshold=constants.CONF_DEFAULT_SIMILARITY_THRESHOLD,
+        download_limit_mb=constants.SIZE_DOWNLOAD_LIMIT_MB):
+    
     """ Function to configure the main program"""
     import nltk
     nltk.download('wordnet')
@@ -72,19 +86,46 @@ def configure(authorization="",
     #         data = json.load(fh)
     # else:
     data = {
-        constants.CONF_AUTHORIZATION: "token " + authorization,
-        constants.CONF_DESCRIPTION: description,
-        constants.CONF_INVOCATION: invocation,
-        constants.CONF_INSTALLATION: installation,
-        constants.CONF_CITATION: citation,
-        constants.CONF_BASE_URI: base_uri
+        # constants.CONF_AUTHORIZATION: "token " + authorization,
+        # constants.CONF_DESCRIPTION: description,
+        # constants.CONF_INVOCATION: invocation,
+        # constants.CONF_INSTALLATION: installation,
+        # constants.CONF_CITATION: citation,
+        constants.CONF_BASE_URI: base_uri,
+        constants.CONF_SIMILARITY_THRESHOLD: similarity_threshold,
+        constants.CONF_DOWNLOAD_LIMIT_MB: download_limit_mb
     }
 
-    if data[constants.CONF_AUTHORIZATION] == "token ":
-        del data[constants.CONF_AUTHORIZATION]
+    # if data[constants.CONF_AUTHORIZATION] == "token ":
+    #     del data[constants.CONF_AUTHORIZATION]
+
+    if github_authorization:
+        data[constants.CONF_GITHUB_AUTHORIZATION] = "token " + github_authorization
+
+    if gitlab_authorization:
+        token = gitlab_authorization
+        if not token.lower().startswith("bearer "):
+            token = "Bearer " + token
+        data[constants.CONF_GITLAB_AUTHORIZATION] = token
+
+    if codeberg_authorization:
+        token = codeberg_authorization
+        if not token.lower().startswith("token "):
+            token = "token " + token
+        data[constants.CONF_CODEBERG_AUTHORIZATION] = token
+
+
+    if bitbucket_authorization:
+        token = bitbucket_authorization
+        email = bitbucket_email  
+        if not token.lower().startswith("basic "):
+            raw = f"{email}:{token}"
+            token = "Basic " + base64.b64encode(raw.encode()).decode()
+        data[constants.CONF_BITBUCKET_AUTHORIZATION] = token
 
     with credentials_file.open("w") as fh:
         credentials_file.parent.chmod(0o700)
         credentials_file.chmod(0o600)
         json.dump(data, fh)
         logging.info("Configuration file saved at "+os.path.dirname(credentials_file))
+

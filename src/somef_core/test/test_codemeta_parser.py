@@ -1,12 +1,14 @@
 import unittest
 import os
 import yaml
+import logging
 from pathlib import Path
 
 from somef_core.parser.codemeta_parser import parse_codemeta_json_file
 from somef_core.process_results import Result
 from somef_core.utils import constants
 
+logging.basicConfig(level=logging.INFO)
 TEST_ROOT = Path(__file__).parent
 REPOS_DIR = TEST_ROOT / "test_data" / "repositories"
 EXPECT_DIR = TEST_ROOT / "test_data" / "expected"
@@ -17,19 +19,25 @@ class TestCodemetaParser(unittest.TestCase):
         """Load expected YAML for a given repo."""
         yaml_path = EXPECT_DIR / f"{repo_name}.yaml"
         if not yaml_path.exists():
-            self.skipTest(f"No expected YAML for repository '{repo_name}'")
+            if repo_name == "codemeta_repo":
+                return {}
+            # self.skipTest(f"No expected YAML for repository '{repo_name}'")
+            logging.warning(f"No expected YAML for repository '{repo_name}'")
+            return None
         with open(yaml_path, "r", encoding="utf-8") as f:
             return yaml.safe_load(f)
 
     def test_parse_multiple_codemeta_files(self):
         for repo_folder in os.listdir(REPOS_DIR):
-            print(f"################# Testing {repo_folder} #################")
+            logging.info(f"################# Testing {repo_folder} #################")
             repo_path = REPOS_DIR / repo_folder
             codemeta_path = repo_path / "codemeta.json"
             if not codemeta_path.is_file():
                 continue 
 
             expected = self.load_expected(repo_folder)
+            if expected is None:
+                continue
             result = Result()
             metadata_result = parse_codemeta_json_file(
                 str(codemeta_path),
@@ -40,17 +48,34 @@ class TestCodemetaParser(unittest.TestCase):
             with self.subTest(repo=repo_folder):
                 # In order for us to check every test, we need every file in "expected" directory to be of .yaml, 
                 # and make sure the name is the same as the repo folder  
-                print(f"################# Processing expectation of {repo_folder} #################")
+                logging.info(f"################# Processing expectation of {repo_folder} #################")
                 for cat_name, expected_val in expected.items():
                     cat_const = getattr(constants, cat_name)
                     actual_list = metadata_result.results.get(cat_const, [])
+                    # print(f"Actual list for {cat_name}: {actual_list}")
+
                     self.assertTrue(
                         actual_list,
                         f"[{repo_folder}] No results for {cat_name}"
                     )
 
                     first = actual_list[0]["result"]
-                    if isinstance(expected_val, dict):
+                    if isinstance(expected_val, list):
+                        first_value = first.get("value")
+                        if isinstance(first_value, list):
+                            self.assertEqual(
+                                first_value, expected_val,
+                                f"[{repo_folder}] Mismatch in {cat_name} list (single entry)"
+                            )
+                        else:
+                            actual_values = []
+                            for entry in actual_list:
+                                actual_values.append(entry["result"]["value"])
+                            self.assertEqual(
+                                actual_values, expected_val,
+                                f"[{repo_folder}] Mismatch in {cat_name} list"
+                            )
+                    elif isinstance(expected_val, dict):
                         for key, val in expected_val.items():
                             self.assertEqual(
                                 first.get(key), val,
@@ -61,6 +86,58 @@ class TestCodemetaParser(unittest.TestCase):
                             first.get("value"), expected_val,
                             f"[{repo_folder}] Mismatch in {cat_name}"
                         )
+
+
+    def test_parse_contributors(self):
+        codemeta_path = REPOS_DIR / "codemeta_repo" / "codemeta.json"
+        result = Result()
+
+        metadata_result = parse_codemeta_json_file(codemeta_path, result, "https://example.org/codemeta.json")
+        
+        self.assertIn(constants.CAT_CONTRIBUTORS, metadata_result.results)
+        contributors = result.results[constants.CAT_CONTRIBUTORS]
+ 
+        self.assertTrue(any(
+            c["result"]["name"] == "Abby Cabunoc Mayes" and
+            c["result"].get("given_name") == "Abby Cabunoc"
+            for c in contributors
+        ))
+
+        self.assertTrue(any(
+            c["result"]["name"] == "Arfon Smith" and
+            c["result"].get("identifier") == "http://orcid.org/0000-0002-3957-2474"
+            for c in contributors
+        ))
+
+        self.assertTrue(any(
+            c["result"]["name"] == "Dan Katz" and
+            c["result"].get("email") == "dskatz@illinois.edu"
+            for c in contributors
+        ))
+
+
+    def test_parse_reference_publications_authors_issue_957(self):
+        """
+        Test to ensure that authors in the citation category correctly use the 'given_name' and 
+        'family_name' properties instead of the old camelCase convention.
+        """
+        codemeta_path = REPOS_DIR / "Widoco" / "codemeta.json"
+        result = Result()
+
+        metadata_result = parse_codemeta_json_file(codemeta_path, result, "https://example.org/codemeta.json")
+        
+        self.assertIn(constants.CAT_CITATION, metadata_result.results)
+        citations = result.results[constants.CAT_CITATION]
+        found = False
+
+        for cit in citations:
+            authors = cit["result"].get(constants.CAT_AUTHORS, [])
+            if any(a.get("name") == "Daniel Garijo" and a.get("family_name") == "Garijo" and a.get("given_name") == "Daniel" for a in authors):
+                found = True
+                break
+        
+        self.assertTrue(found, "Author 'Daniel Garijo' with 'given_name' not found in citation author")
+
 
 if __name__ == "__main__":
     unittest.main()

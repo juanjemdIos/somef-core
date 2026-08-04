@@ -1,6 +1,2 @@
-{
-	"description" : "./models/description.p",
-	"citation" : "./models/citation.p",
-	"installation" : "./models/installation.p",
-	"invocation" : "./models/invocation.p"
+{	"similarity_threshold": 0.8
 }

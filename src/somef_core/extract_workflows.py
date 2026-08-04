@@ -36,6 +36,25 @@ def is_file_workflow(file_path):
         logging.warning(f"Error reading file {file_path}: {e}")
         return False
     
+# def is_file_workflow(file_path):
+
+#     print(file_path)
+#     with open(file_path, 'r') as file:
+#         print(file)
+#         content = file.read()
+#         try:
+#             Galaxy_match = re.search(Galaxy_pattern, content)
+#             CWL_match = re.search(CWL_pattern, content)
+#             Workflow_match = re.search(Workflow_content_pattern, content)
+#             Workflow_match_2 = re.search(workflow_pattern, content, re.IGNORECASE)
+#             Nextflow_match = re.search(Nextflow_pattern, content)
+#             if Galaxy_match or CWL_match or Workflow_match or Workflow_match_2 or Nextflow_match:
+#                 return True
+#             else:
+#                 return False
+#         except Exception:
+#             pass
+
 def is_file_continuous_integration_gitlab(file_path):
     """Detects if a file is a GitLab CI/CD pipeline."""
     with open(file_path, 'r') as file:

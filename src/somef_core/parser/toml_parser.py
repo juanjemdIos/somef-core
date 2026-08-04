@@ -118,7 +118,8 @@ def extract_common_version_field(data, metadata_result, source, file_type):
     For Project.toml: data["version"]
     """
     version_value = None
-
+    version_type = None
+    
     if file_type == "cargo" and "package" in data and "version" in data["package"]:
         version_value = data["package"]["version"]
         version_type = constants.RELEASE
@@ -340,9 +341,10 @@ def parse_cargo_metadata(data, metadata_result, source, file_path):
                     "value": req,
                     "name": name,
                     "version": version,
-                    "type": constants.SOFTWARE_APPLICATION,
+                    "type": constants.SOFTWARE_DEPENDENCY,
                     "dependency_type": dep_type,
-                    "dependency_resolver": "cargo"               },
+                    "dependency_resolver": "cargo"               
+                    },
                 1,
                 constants.TECHNIQUE_CODE_CONFIG_PARSER,
                 source
@@ -362,7 +364,7 @@ def parse_cargo_metadata(data, metadata_result, source, file_path):
                         "value": req,
                         "name": name,
                         "version": version,
-                        "type": constants.SOFTWARE_APPLICATION,
+                        "type": constants.SOFTWARE_DEPENDENCY,
                         "dependency_type": dep_type,
                         "dependency_resolver": "cargo"
                     },
@@ -405,7 +407,7 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                         "value": req,
                         "name": name,
                         "version": version,
-                        "type": constants.SOFTWARE_APPLICATION,
+                        "type": constants.SOFTWARE_DEPENDENCY,
                         "dependency_type":constants.DEPENDENCY_TYPE_RUNTIME,
                         "dependency_resolver": "python"
                     },
@@ -422,7 +424,7 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                     "value": req,
                     "name": name,
                     "version": version,
-                    "type": constants.SOFTWARE_APPLICATION,
+                    "type": constants.SOFTWARE_DEPENDENCY,
                     "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
                     "dependency_resolver": "python"
                 },
@@ -444,7 +446,7 @@ def parse_pyproject_metadata(data, metadata_result, source, file_path):
                             "value": req,
                             "name": name,
                             "version": version,
-                            "type": constants.SOFTWARE_APPLICATION,
+                            "type": constants.SOFTWARE_DEPENDENCY,
                             "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
                             "dependency_resolver": "python"
                         },
@@ -573,7 +575,7 @@ def parse_julia_project_metadata(data, metadata_result, source):
                 {
                     "value": req,
                     "name": req,
-                    "type": constants.SOFTWARE_APPLICATION,
+                    "type": constants.SOFTWARE_DEPENDENCY,
                     "dependency_type": constants.DEPENDENCY_TYPE_RUNTIME,
                     "dependency_resolver": "julia"
                 },
@@ -598,7 +600,7 @@ def parse_julia_project_metadata(data, metadata_result, source):
             {
                 "value": req,
                 "name": req,
-                "type": constants.SOFTWARE_APPLICATION,
+                "type": constants.SOFTWARE_DEPENDENCY,
                 "dependency_type": constants.DEPENDENCY_TYPE_DEVELOPMENT,
                 "dependency_resolver": "julia"
             },

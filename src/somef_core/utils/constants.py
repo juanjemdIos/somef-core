@@ -3,15 +3,24 @@ import os
 from pathlib import Path
 
 # constants about SOMEF configuration
-CONF_AUTHORIZATION = "Authorization"
+# CONF_AUTHORIZATION = "Authorization"
+CONF_GITHUB_AUTHORIZATION = "GitHubAuthorization"
+CONF_GITLAB_AUTHORIZATION = "GitlabAuthorization"
+CONF_CODEBERG_AUTHORIZATION = "CodebergAuthorization"
+CONF_BITBUCKET_AUTHORIZATION = "BitbucketAuthorization"
+# Backward-compatible key used in legacy code paths for GitHub authorization.
+CONF_AUTHORIZATION = CONF_GITHUB_AUTHORIZATION
+PROP_AUTHORIZATION = "Authorization"
+
 CONF_DESCRIPTION = "description"
 CONF_INVOCATION = "invocation"
 CONF_INSTALLATION = "installation"
 CONF_CITATION = "citation"
 CONF_BASE_URI = "base_uri"
 CONF_DEFAULT_BASE_URI = "https://w3id.org/okn/i/"
+CONF_DOWNLOAD_LIMIT_MB = "download_limit_mb"
 
-__DEFAULT_SOMEF_CONFIGURATION_FILE__ = "~/.somef/config.json"
+__DEFAULT_SOMEF_CONFIGURATION_FILE__ = "~/.somef_core/config.json"
 
 # constants with regular expressions. Right now this has room for becoming more efficient
 REGEXP_BINDER = r'\[\!\[Binder\]([^\]]+)\]\(([^)]+)\)'
@@ -38,7 +47,7 @@ REGEXP_PAGES = r'pages\s*=\s*{([\d-]+)}'
 # Project Homepage badge'
 REGEXP_PROJECT_HOMEPAGE = r'\[\!\[Project homepage\]([^\]]+)\]\(([^)]+)\)'
 
-# Redthedocs badges'
+# Readthedocs badges'
 REGEXP_READTHEDOCS_RST = (
     r"https?://readthedocs\.org/projects/[^\s/]+/badge/[^\s]*"
     r"[^\n]*?:target:\s*(https?://[^\s\"']+)"
@@ -63,29 +72,41 @@ REGEXP_TITLE_NATURAL = r'["“](.+?)["”]'
 #License spdx
 # REGEXP_APACHE = r'(?i)apache\s+license\s*,?\s*version\s*2\.0'
 REGEXP_APACHE = r'(?i)apache(?:\s+license)?\s*(?:,?\s*version\s*)?2\.0'
-REGEXP_GPL3 = r'(?i)gnu\s+general\s+public\s+license\s*,?\s*version\s*3\.0'
-REGEXP_MIT = r'(?i)mit\s+license'
-REGEXP_BSD2 = r'(?i)(bsd\s*-?\s*2-?clause(?:\s*license)?|redistribution\s+and\s+use\s+in\s+source\s+and\s+binary\s+forms)'
+REGEXP_GPL3 = r'(?i)gnu\s+general\s+public\s+license\s*,?\s*version\s*3(?:\.0)?'
+
+# REGEXP_MIT = r'(?i)mit\s+license'
+REGEXP_MIT = r'(?i)(mit\s+license|permission\s+is\s+hereby\s+granted|THE\s+SOFTWARE\s+IS\s+PROVIDED\s+"AS\s+IS")'
+REGEXP_BSD2 = r'(?i)bsd\s*-?\s*2-?clause(?:\s*license)?'
 REGEXP_BSD3 = r'(?i)bsd\s+3-clause\s+license'
 REGEXP_BOOST = r'(?i)boost\s+software\s+license\s*,?\s*version\s*1\.0'
 REGEXP_CC0 = r'(?i)creative\s+commons\s+zero\s+v?1\.0\s+universal'
 REGEXP_EPL2 = r'(?i)eclipse\s+public\s+license\s*,?\s*version\s*2\.0'
 REGEXP_AGPL3 = r'(?i)gnu\s+affero\s+general\s+public\s+license\s*(?:v(?:ersion)?\.?\s*3(?:\.0)?)'
-REGEXP_GPL2 = r'(?i)gnu\s+general\s+public\s+license\s*,?\s*version\s*2\.0'
+REGEXP_GPL2 = r'(?i)gnu\s+general\s+public\s+license\s*,?\s*version\s*2(?:\.0)?'
 REGEXP_LGPL1 = r'(?i)gnu\s+lesser\s+general\s+public\s+license\s*,?\s*version\s*1\.0'
 REGEXP_MPL2 = r'(?i)mozilla\s+public\s+license\s*,?\s*version\s*2\.0'
 REGEXP_UNLICENSE = r'(?i)the\s+unlicense'
 
+# detect choosealicense in badges
+REGEXP_CHOOSE_LICENSE = r'choosealicense\.com/licenses/([^/\s]+)'
+
 # Detect organization in authors.md
-REGEXP_LTD_INC = r'\b(inc|ltd|llc|corporation)([.,]|\b)'
+# REGEXP_LTD_INC = r'\b(inc|ltd|llc|corporation)([.,]|\b)'
+REGEXP_LTD_INC = r'\b(inc|ltd|llc|corporation|foundation|community|project|team|group|society|institute|association|consortium|organization|organisation)([.,]|\b)'
 
 # Detect duplicate all kind of dois. 
 REGEXP_ALL_DOIS = r'10\.\d{4,9}/[-._;()/:A-Z0-9]+'
 
 # Detect zenodo latest doi in readme. 
+ZENODO_API_BASE = "https://zenodo.org/api"
 REGEXP_ZENODO_LATEST_DOI = r':target:\s*(https://zenodo\.org/badge/latestdoi/\d+)'
 REGEXP_ZENODO_DOI = r'https://zenodo\.org/badge/DOI/\d+'
 REGEXP_ZENODO_JSON_LD = r"<script[^>]*type=['\"]application/ld\+json['\"][^>]*>(.*?)</script>"
+
+# Detect copyright information in license files. 
+REGEXP_COPYRIGHT = r"copyright\s*(?:\(c\)|©|\(C\))?\s*\{?(\d{4}(?:-\d{4})?)\}?\s*\{?([^\n}]+)\}?"
+
+REGEXP_CLEAN_HTML_TAGS = r'<[^>]+>'
 
 LICENSES_DICT = {
     "Apache License 2.0": {"regex": REGEXP_APACHE, "spdx_id": "Apache-2.0"},
@@ -104,15 +125,16 @@ LICENSES_DICT = {
 }
 # Categories recognized by SOMEF (they all start by CAT_
 CAT_ASSETS = "assets"
-CAT_AUTHORS = "authors"
+CAT_AUTHORS = "author"
 CAT_APPLICATION_DOMAIN = "application_domain"
 CAT_ACKNOWLEDGEMENT = "acknowledgement"
 CAT_CITATION = "citation"
-CAT_CONTRIBUTORS = "contributors"
+CAT_CONTRIBUTORS = "contributor"
 CAT_CONTRIBUTING_GUIDELINES = "contributing_guidelines"
 CAT_COC = "code_of_conduct"
 CAT_CODE_REPOSITORY = "code_repository"
 CAT_CONTACT = "contact"
+CAT_COPYRIGHT = "copyright_holder"
 CAT_DATE_CREATED = "date_created"
 CAT_DATE_UPDATED = "date_updated"
 CAT_DATE_PUBLISHED = "date_published"
@@ -154,6 +176,7 @@ REGEXP_PACKAGE_MANAGER = r"""
 """
 CAT_PROGRAMMING_LANGUAGES = "programming_languages"
 CAT_README_URL = "readme_url"
+# CAT_REFERENCE_PUBLICATION = "reference_publication"
 CAT_RELATED_DOCUMENTATION = "related_documentation"
 CAT_RELATED_PAPERS = "related_papers"
 CAT_RELEASES = "releases"
@@ -166,7 +189,7 @@ CAT_SUPPORT = "support"
 CAT_SUPPORT_CHANNELS = "support_channels"
 CAT_USAGE = "usage"
 CAT_WORKFLOWS = "workflows"
-CAT_TYPE = "type"
+CAT_APPLICATION_TYPE = "application_type"  # former CAT_TYPE
 CAT_PACKAGE_ID = "package_id"
 CAT_HAS_PACKAGE_FILE = "has_package_file"
 CAT_VERSION = "version"
@@ -184,7 +207,7 @@ supervised_categories = [CAT_DESCRIPTION]
 # list with all categories
 all_categories = [CAT_APPLICATION_DOMAIN, CAT_ACKNOWLEDGEMENT, CAT_AUTHORS, CAT_CITATION, CAT_CONTRIBUTORS,
                   CAT_CONTRIBUTING_GUIDELINES, CAT_CONTINUOUS_INTEGRATION,
-                  CAT_COC, CAT_CODE_REPOSITORY, CAT_CONTACT, CAT_DESCRIPTION, CAT_DATE_CREATED, CAT_DATE_UPDATED,
+                  CAT_COC, CAT_CODE_REPOSITORY, CAT_CONTACT, CAT_COPYRIGHT, CAT_DESCRIPTION, CAT_DATE_CREATED, CAT_DATE_UPDATED,
                   CAT_DOCUMENTATION, CAT_DOWNLOAD, CAT_DOWNLOAD_URL, CAT_EXECUTABLE_EXAMPLE,
                   CAT_FAQ, CAT_FORK_COUNTS, CAT_FORKS_URLS, CAT_FULL_NAME, CAT_FULL_TITLE, CAT_HAS_BUILD_FILE,
                   CAT_HAS_SCRIPT_FILE, CAT_IDENTIFIER, CAT_IMAGE, CAT_INSTALLATION,
@@ -192,7 +215,7 @@ all_categories = [CAT_APPLICATION_DOMAIN, CAT_ACKNOWLEDGEMENT, CAT_AUTHORS, CAT_
                   CAT_OWNER, CAT_PACKAGE_DISTRIBUTION, CAT_HAS_PACKAGE_FILE, CAT_PROGRAMMING_LANGUAGES, CAT_README_URL,
                   CAT_RELATED_DOCUMENTATION, CAT_RELEASES, CAT_RUN, CAT_RUNTIME_PLATFORM, CAT_RELATED_PAPERS,
                   CAT_STATUS, CAT_REQUIREMENTS, CAT_STARS, CAT_SUPPORT, CAT_SUPPORT_CHANNELS, CAT_USAGE,
-                  CAT_WORKFLOWS, CAT_TYPE]
+                  CAT_WORKFLOWS, CAT_APPLICATION_TYPE]
 
 # All properties used by SOMEF to label the output JSON
 # Provenance:
@@ -225,19 +248,30 @@ PROP_DATE_UPDATED = "date_updated"
 PROP_DEPENDENCY_TYPE = "dependency_type"
 PROP_DEPENDENCY_RESOLVER = "dependency_resolver"
 PROP_EMAIL = "email"
+PROP_GIVEN_NAME = "given_name"
+PROP_FAMILY_NAME = "family_name"
+PROP_FUNDER = "funder"
+PROP_FUNDING = "funding"
 PROP_HTML_URL = "html_url"
 PROP_IDENTIFIER = "identifier"
+PROP_JOURNAL = "journal"
+PROP_LAST_NAME = "last_name"
+PROP_LICENSE = "license"
 PROP_NAME = "name"
 PROP_ORIGINAL_HEADER = "original_header"
+PROP_PAGES = "pages"
 PROP_PARENT_HEADER = "parent_header"
+PROP_PREFERRED_CITATION = "is_preferred_citation"
 PROP_RELEASE_ID = "release_id"
 PROP_ROLE = "role"
 PROP_SIZE = "size"
 PROP_SPDX_ID = "spdx_id"
 PROP_TAG = "tag"
+PROP_COMMIT = "commit"
 PROP_URL = "url"
 PROP_USERNAME = "username"
 PROP_VERSION = "version"
+PROP_YEAR = "year"
 PROP_ZIPBALL_URL = "zipball_url"
 PROP_TARBALL_URL = "tarball_url"
 # Publications
@@ -277,10 +311,11 @@ FILE_DUMP = "File_dump"
 AGENT = "Agent"
 RELEASE = "Release"
 LICENSE = "License"
-PUBLICATION = "Publication"
+# PUBLICATION = "Publication"
 LANGUAGE = "Programming_language"
-SOFTWARE_APPLICATION = "Software_application"
-SCHOLARLY_ARTICLE = "Scholarly_article"
+SOFTWARE_APPLICATION = "SoftwareApplication"
+SOFTWARE_DEPENDENCY = "SoftwareDependency"
+SCHOLARLY_ARTICLE = "ScholarlyArticle"
 
 # Different techniques
 TECHNIQUE_SUPERVISED_CLASSIFICATION = "supervised_classification"
@@ -290,12 +325,22 @@ TECHNIQUE_FILE_EXPLORATION = "file_exploration"
 TECHNIQUE_CODE_CONFIG_PARSER = "code_parser"
 TECHNIQUE_GITHUB_API = "GitHub_API"
 TECHNIQUE_GITLAB_API = "GitLab_API"
+TECHNIQUE_CODEBERG_API = "Codeberg_API"
+TECHNIQUE_BITBUCKET_API = "Bitbucket_API"
 TECHNIQUE_HEURISTICS = "software_type_heuristics"
 
 # GitHub properties
 GITHUB_DOMAIN = "github.com"
 GITHUB_ACCEPT_HEADER = "application/vnd.github.v3+json"
 GITHUB_API = "https://api.github.com/repos"
+
+#Codeberg properties
+CODEBERG_DOMAIN = "codeberg.org"
+CODEBERG_API = "https://codeberg.org/api/v1/repos"
+
+# Bitbucket properties
+BITBUCKET_DOMAIN = "bitbucket.org"
+BITBUCKET_API = "https://api.bitbucket.org/2.0/repositories"
 
 # Software Heritage
 SWH_ROOT = "https://archive.softwareheritage.org/"
@@ -326,6 +371,38 @@ github_crosswalk_table = {
     CAT_KEYWORDS: "topics",
     CAT_FORK_COUNTS: "forks_count",
     CAT_HOMEPAGE: "homepage"
+}
+
+# Crosswalk to retrieve easily contents of interest from the codeberg response
+codeberg_crosswalk_table = {
+    CAT_CODE_REPOSITORY: "html_url",
+    "languages_url": "languages_url",
+    CAT_OWNER: ["owner", "login"],
+    # AGENT_TYPE: ["owner", "type"],
+    CAT_DATE_CREATED: "created_at",
+    CAT_DATE_UPDATED: "updated_at",
+    CAT_DESCRIPTION: "description",
+    CAT_NAME: "name",
+    CAT_FULL_NAME: "full_name",
+    # CAT_ISSUE_TRACKER: "issues_url",
+    CAT_STARS: "stars_count",              
+    CAT_KEYWORDS: "topics",
+    CAT_FORK_COUNTS: "forks_count",
+    CAT_HOMEPAGE: "website"
+}
+
+
+bitbucket_crosswalk_table = {
+    CAT_FULL_NAME: "full_name",
+    CAT_NAME: "name",
+    CAT_DESCRIPTION: "description",
+    CAT_DATE_CREATED: "created_on",
+    CAT_DATE_UPDATED: "updated_on",
+    CAT_OWNER: ["owner", "username"],
+    CAT_CODE_REPOSITORY: ["links", "html", "href"],
+    CAT_HOMEPAGE: "website",
+    CAT_FORKS_URLS: ["links", "forks", "href"]
+    # CAT_PROGRAMMING_LANGUAGES: "language",
 }
 
 # Mapping for releases
@@ -370,13 +447,43 @@ release_assets_github = {
     PROP_DOWNLOAD_COUNT: "download_count"
 }
 
+release_assets_codeberg = {
+    PROP_URL: "url",
+    PROP_NAME: "name",
+    PROP_SIZE: "size",
+    PROP_BROWSER_URL: "browser_download_url",
+    PROP_CONTENT_TYPE: "content_type",
+    PROP_DATE_CREATED_AT: "created_at",
+    PROP_DOWNLOAD_COUNT: "download_count"
+}
+
+release_codeberg_crosswalk_table = {
+    PROP_TAG: 'tag_name',
+    PROP_NAME: 'name',
+    PROP_AUTHOR: ['author', 'login'],
+    # AGENT_TYPE: ['author', 'type'],
+    PROP_DESCRIPTION: 'body',
+    PROP_TARBALL_URL: 'tarball_url',
+    PROP_ZIPBALL_URL: 'zipball_url',
+    PROP_HTML_URL: 'html_url',
+    PROP_URL: 'url',
+    PROP_RELEASE_ID: 'id',
+    PROP_DATE_CREATED: 'created_at',
+    PROP_DATE_PUBLISHED: "published_at",
+    # CAT_ASSETS: "attachments"               
+}
+
+release_bitbucket_crosswalk_table = {
+    PROP_TAG: "name",
+    PROP_NAME: "name",
+}
 # Minimum percentage of total bytes a programming language must have to be considered relevant in CodeMeta file.
 MINIMUM_PERCENTAGE_LANGUAGE_PROGRAMMING = 10
 
 # TO DO: Assess run and download.
 categories_files_header = [CAT_INSTALLATION, CAT_CITATION, CAT_ACKNOWLEDGEMENT, "run", "download", CAT_REQUIREMENTS,
                            CAT_CONTACT, CAT_DESCRIPTION, CAT_CONTRIBUTORS, CAT_DOCUMENTATION, CAT_LICENSE, CAT_USAGE,
-                           CAT_FAQ, CAT_SUPPORT, CAT_IDENTIFIER, CAT_HAS_BUILD_FILE, CAT_EXECUTABLE_EXAMPLE, CAT_KEYWORDS]
+                           CAT_FAQ, CAT_SUPPORT, CAT_IDENTIFIER, CAT_HAS_BUILD_FILE, CAT_EXECUTABLE_EXAMPLE, CAT_KEYWORDS, CAT_RUNTIME_PLATFORM]
 
 # Config to materialize with yarrrml.yml.
 MAPPING_CONFIG = """
@@ -402,6 +509,8 @@ class RepositoryType(Enum):
     GITHUB = 1
     GITLAB = 2
     LOCAL = 3
+    CODEBERG = 4
+    BITBUCKET = 5
 
 # Media/script/non-software sets
 workflow_extensions=('.ga','.cwl','.nf','.knwf','.t2flow','.dag','.kar','.wdl',".smk",".snake")
@@ -416,16 +525,23 @@ SIZE_DOWNLOAD_LIMIT_MB = 200
 DOWNLOAD_TIMEOUT_SECONDS = 120
 
 # CODEMETA Categories. All start with CAT_CODEMETA
+CAT_CODEMETA_APPLICATIONCATEGORY = "applicationCategory"
 CAT_CODEMETA_AUTHOR = "author"
 CAT_CODEMETA_BUILDINSTRUCTIONS = "buildInstructions"
 CAT_CODEMETA_CODEREPOSITORY = "codeRepository"
+CAT_CODEMETA_CONTRIBUTOR = "contributor"
 CAT_CODEMETA_CONTINUOUSINTEGRATION = "continuousIntegration"
+CAT_CODEMETA_COPYRIGHTHOLDER = "copyrightHolder"
+CAT_CODEMETA_COPYRIGHTYEAR = "copyrightYear"
+CAT_CODEMETA_CREDITTEXT = "creditText"
 CAT_CODEMETA_DATECREATED = "dateCreated"
 CAT_CODEMETA_DATEMODIFIED = "dateModified"
 CAT_CODEMETA_DATEPUBLISHED = "datePublished"
 CAT_CODEMETA_DESCRIPTION = "description"
 CAT_CODEMETA_DEVELOPMENTSTATUS = "developmentStatus"
 CAT_CODEMETA_DOWNLOADURL = "downloadUrl"
+CAT_CODEMETA_FUNDER = "funder"
+CAT_CODEMETA_FUNDING = "funding"
 CAT_CODEMETA_ISSUETRACKER = "issueTracker"
 CAT_CODEMETA_IDENTIFIER = "identifier"
 CAT_CODEMETA_KEYWORDS = "keywords"
@@ -433,6 +549,7 @@ CAT_CODEMETA_LICENSE = "license"
 CAT_CODEMETA_LOGO = "logo"
 CAT_CODEMETA_MAINTAINER = "maintainer"
 CAT_CODEMETA_NAME = "name"
+CAT_CODEMETA_OWNER = "schema:owner"
 CAT_CODEMETA_PROGRAMMINGLANGUAGE = "programmingLanguage"
 CAT_CODEMETA_README = "readme"
 CAT_CODEMETA_REFERENCEPUBLICATION = "referencePublication"
@@ -442,6 +559,12 @@ CAT_CODEMETA_SOFTWAREREQUIREMENTS = "softwareRequirements"
 CAT_CODEMETA_SOFTWAREVERSION = "softwareVersion"
 CAT_CODEMETA_URL = "url"
 
+PROP_CODEMETA_GIVENAME = "givenName"
+PROP_CODEMETA_FAMILYNAME = "familyName"
+PROP_CODEMETA_ID= "@id"
+PROP_CODEMETA_TYPE = "@type"
+TYPE_CONTRIBUTOR_ORGANIZATION = "Organization"
+TYPE_CONTRIBUTOR_PERSON = "Person"
 
 # DOCKER labels maintainer
 # REGEXP_MAINTAINER_LABEL_OCI = r'^\s*LABEL\s+org\.opencontainers\.image\.authors\s*=\s*["\']?(.+?)["\']?\s*$'
@@ -511,3 +634,99 @@ NEGATIVE_PATTERNS_CITATION_HEADERS = [
 
 DEPENDENCY_TYPE_RUNTIME = "runtime"
 DEPENDENCY_TYPE_DEVELOPMENT = "development"
+
+# same length for all categories or different length depending on the category????????.
+# This is used in the header analysis technique, to determine how many words from the header should be included in the analysis
+# and avoid including false positives.
+MAX_HEADER_WORDS = {
+    CAT_DOCUMENTATION: 5,
+    CAT_REQUIREMENTS: 3,
+    CAT_CITATION: 5,
+}
+
+# Confidence thresholds for header analysis based on header length
+HEADER_CONFIDENCE_THRESHOLDS = [
+    (3, 1.0),   # 1-3 words -> confidence 1.0
+    (6, 0.8),   # 4-6 words -> confidence 0.8
+    (10, 0.5),  # 7-10 words -> confidence 0.5
+    (11, 0.1),  # 11+ words -> confidence 0.1
+]
+# in case not exist in config file. But config file has higher priority than this default value.
+CONF_SIMILARITY_THRESHOLD = "similarity_threshold"
+CONF_DEFAULT_SIMILARITY_THRESHOLD = 0.8
+
+# Keywords for OS/platform header detection (terms WordNet cannot handle semantically)
+OS_PLATFORM_HEADER_KEYWORDS = [
+    "windows", "linux", "macos", "mac os", "osx", "os x", "unix",
+    "ubuntu", "debian", "centos", "fedora", "red hat",
+    "platform", "platforms", "operating system", "os",
+    "docker", "container", "conda", "anaconda", "miniconda",
+    "compatibility", "system requirements", "supported os",
+    "supported platforms", "tested on", "runs on", "environment",
+]
+
+INSTALLATION_HEADER_KEYWORDS = [
+    "importing",
+    "downloading",
+    "download",
+    "as a dependency",
+    "as dependency",
+    "via pip",
+    "via conda",
+    "via npm",
+    "via maven",
+    "getting started",
+    "quick start",
+    "quickstart",
+]
+# Regular expressions for OS/platform detection in header analysis
+REGEXP_OS_WINDOWS = r'(?i)\bwindows\s*(\d[\d.]*\d|\d+)?'
+REGEXP_OS_MACOS = r'(?i)(?:\bmacos|\bmac\s*os|\bos\s*x|\bosx)\s*([\d.]+)?'
+REGEXP_OS_UBUNTU = r'(?i)\bubuntu\s*([\d.]+(?:\.\d+)?)?'
+REGEXP_OS_DEBIAN = r'(?i)\bdebian\s*([\d.]+)?'
+REGEXP_OS_CENTOS = r'(?i)\bcentos\s*([\d.]+)?'
+REGEXP_OS_FEDORA = r'(?i)\bfedora\s*([\d.]+)?'
+REGEXP_OS_REDHAT = r'(?i)\bred\s*hat\b'
+REGEXP_OS_LINUX = r'(?i)\blinux\b'
+REGEXP_OS_UNIX = r'(?i)\bunix\b'
+REGEXP_OS_DOCKER = r'(?i)\bdocker\b'
+REGEXP_OS_CONDA = r'(?i)\bconda\b|\banaconda\b|\bminiconda\b'
+
+# Mapping of OS/platform patterns to their normalized names
+OS_PATTERNS = [
+    (REGEXP_OS_WINDOWS, "Windows"),
+    (REGEXP_OS_MACOS, "macOS"),
+    (REGEXP_OS_UBUNTU, "Ubuntu"),
+    (REGEXP_OS_DEBIAN, "Debian"),
+    (REGEXP_OS_CENTOS, "CentOS"),
+    (REGEXP_OS_FEDORA, "Fedora"),
+    (REGEXP_OS_REDHAT, "Red Hat"),
+    (REGEXP_OS_LINUX, "Linux"),
+    (REGEXP_OS_UNIX, "Unix"),
+    (REGEXP_OS_DOCKER, "Docker"),
+    (REGEXP_OS_CONDA, "Conda")
+]
+
+OS_EXTRACTION_CATEGORIES = {
+    CAT_RUNTIME_PLATFORM,
+    CAT_REQUIREMENTS,
+    CAT_INSTALLATION,
+}
+
+# Enrichment 
+OPENALEX_BASE = "https://api.openalex.org"
+OPENAIRE_BASE = "https://api.openaire.eu"
+OPENAIRE_EXPLORE = "https://explore.openaire.eu"
+OPENAIRE_NAMESPACE = "http://namespace.openaire.eu/oaf"
+REGEXP_DOI_IN_URL = r'(10\.\d{4,9}/[-._;()/:A-Za-z0-9]+)'
+REGEXP_FIND_ZENODO = r'zenodo\.(\d+)'
+PROP_OPENALEX_ID = "openalex_id"
+PROP_OPENAIRE_ID = "openaire_id"
+PROP_SWHID = "swhid"
+PROP_PROJECT_CODE = "project_code"
+PROP_PROJECT_TITLE = "project_title"
+PROP_PROJECT_ACRONYM = "project_acronym"
+PROP_GRANT_ID = "grant_id"
+PROP_FUNDER = "funder"
+PROP_START_DATE = "start_date"
+PROP_END_DATE = "end_date"
