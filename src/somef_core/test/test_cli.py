@@ -813,4 +813,3 @@ class TestCli(unittest.TestCase):
         assert constants.CAT_ACKNOWLEDGEMENT not in json_content
         os.remove(test_data_path + "repositories/software_catalog/test-567.json")
 
-

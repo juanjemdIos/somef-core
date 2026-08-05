@@ -1,4 +1,4 @@
-name: Run SOMEF tests before PR
+name: Run SOMEF-core tests before PR
 
 on:
   pull_request:

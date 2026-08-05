@@ -87,10 +87,6 @@ def configure(
     # else:
     data = {
         # constants.CONF_AUTHORIZATION: "token " + authorization,
-        # constants.CONF_DESCRIPTION: description,
-        # constants.CONF_INVOCATION: invocation,
-        # constants.CONF_INSTALLATION: installation,
-        # constants.CONF_CITATION: citation,
         constants.CONF_BASE_URI: base_uri,
         constants.CONF_SIMILARITY_THRESHOLD: similarity_threshold,
         constants.CONF_DOWNLOAD_LIMIT_MB: download_limit_mb

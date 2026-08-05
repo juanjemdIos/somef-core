@@ -43,16 +43,15 @@ def configure(auto, base_uri):
         bitbucket_authorization = click.prompt("Bitbucket Authorization token (leave blank to skip)", default="")
         bitbucket_email = click.prompt("Bitbucket Atlassian account email (for API token auth)", default="")
 
-        # description = click.prompt("Documentation classifier model file", default=configuration.default_description)
-        # invocation = click.prompt("Invocation classifier model file", default=configuration.default_invocation)
-        # installation = click.prompt("Installation classifier model file", default=configuration.default_installation)
-        # citation = click.prompt("Citation classifier model file", default=configuration.default_citation)
+        # description = click.prompt(... model file ...)
+        # invocation = click.prompt(...)
+        # installation = click.prompt(...)
+        # citation = click.prompt(...)
         base_uri = click.prompt("Base URI for RDF generation", default=base_uri)
         download_limit = click.prompt("Download size limit in MB", 
                                default=constants.SIZE_DOWNLOAD_LIMIT_MB, type=int)
         # configuration.configure()
-        configuration.configure(github_authorization, gitlab_authorization, codeberg_authorization, bitbucket_authorization, bitbucket_email, 
-                                description=None, invocation=None, installation=None, citation=None, base_uri=base_uri,  download_limit_mb= download_limit)
+        configuration.configure(github_authorization, gitlab_authorization, codeberg_authorization, bitbucket_authorization, bitbucket_email, description=None, invocation=None, installation=None, citation=None, base_uri=base_uri, download_limit_mb=download_limit)
         
     click.secho(f"Success", fg="green")
 

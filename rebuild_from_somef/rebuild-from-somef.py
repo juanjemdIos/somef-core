@@ -410,7 +410,6 @@ def surgery_constants(content):
     print("  [OK] Default config path moved to ~/.somef_core")
     return content
 
-
 def main():
     parser = argparse.ArgumentParser(description="Rebuild somef-core from somef")
     parser.add_argument(
@@ -473,6 +472,13 @@ def main():
         sync_to_working_tree(tmp)
 
         print("\n[OK] Rebuild completed.")
+        print("\n[REMINDER] Tests that depend on removed ML/ontology features must be removed or commented:")
+        print("  - test_cli.py: test_categorization, test_issue_314_2, test_issue_314_3, test_issue_379,")
+        print("    test_issue_388, test_issue_428, test_issue_457, test_redundant_files")
+        print("  - test_codemeta_export.py: test_issue_544")
+        print("  - test_process_repository.py: test_issue_611")
+        print("  Run pytest and delete/comment any NEW test that fails with KeyError of")
+        print("  'description', 'ontologies', 'application_type' or 'applicationCategory'.")
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
