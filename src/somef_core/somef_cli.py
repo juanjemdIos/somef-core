@@ -6,11 +6,13 @@ import logging
 import os
 import tempfile
 import urllib.parse
+import requests 
+import base64
 
 from os import path
 from . import header_analysis, regular_expressions, process_repository, configuration, process_files
 from .process_results import Result
-from .utils import constants, markdown_utils
+from .utils import constants, markdown_utils, enrichment
 from .export import json_export
 from .export import google_codemeta_export
 from .extract_software_type import check_repository_type
@@ -18,7 +20,7 @@ from urllib.parse import urlparse, quote
 
 def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, local_repo=None,
                  ignore_github_metadata=False, readme_only=False, keep_tmp=None, authorization=None,
-                 ignore_test_folder=True,requirements_mode='all', reconcile_authors=False, branch=None, tag=None) -> Result:
+                 ignore_test_folder=True,requirements_mode='all', reconcile_authors=False, branch=None, tag=None, download_limit= None, commit=None) -> Result:
     """
     Main function to get the data through the command line
     Parameters
@@ -33,11 +35,12 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
     @param keep_tmp: path where to store TMP files in case SOMEF is instructed to keep them
     @param authorization: GitHub authorization token
     @param ignore_test_folder: Ignore contents of test folders
-    @param requiriments_mode: flag to indicate what requirements show in codemeta
+    @param requirements_mode: flag to indicate what requirements show in codemeta 
     @param reconcile_authors: flag to indicate if additional should be extracted from certain files as codeowners. Bear in mind that using this flags consumes more requests to the GitHub API.
     @param branch: branch of the repository to analyze. Overrides the default branch detected from the repository metadata.
     @param tag: tag of the repository to analyze. Cannot be used together with the branch parameter.
-
+    @param download_limit: download size limit in MB.
+    @param commit: commit SHA of the repository to analyze.
     Returns
     -------
     @return: Dictionary with the results found by SOMEF, formatted as a Result object.
@@ -51,6 +54,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
     logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     file_paths = configuration.get_configuration_file()
+    similarity_threshold = file_paths.get(constants.CONF_SIMILARITY_THRESHOLD, constants.CONF_DEFAULT_SIMILARITY_THRESHOLD)
     repo_type = constants.RepositoryType.GITHUB
     repository_metadata = Result()
     def_branch = "main"
@@ -58,29 +62,47 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
     if branch and tag:
         logging.error("You cannot use --branch and --tag at the same time. Mutually exclusive")
         sys.exit()
+    if commit and (branch or tag):
+        logging.error("You cannot use --commit together with --branch or --tag. Mutually exclusive")
+        sys.exit()
 
     if repo_url is not None:
         try:
 
-            # It is necessary to make changes to all methods related to GitLab because, until now,
-            # they only worked with repositories on GitLab.com but not with self-hosted GitLab servers
-            # like gitlab.in2p3.fr, for example. We are going to split the process so that it also
-            # takes these servers into account.
+            """
+            It is necessary to make changes to all methods related to GitLab because, until now, 
+            they only worked with repositories on GitLab.com but not with self-hosted GitLab servers like gitlab.in2p3.fr, for example. 
+            We are going to split the process so that it also takes these servers into account.
+            """
 
-            # The only sure way to know if a server is from GitLab is by checking its API.
-            # GitLab servers are usually of the type gitlab.com, gitlab.in2p3.fr, or even
-            # salsa.debian.org, so you cannot discriminate solely with the string 'gitlab'.
+            """
+            The only sure way to know if a server is from GitLab is by checking its API. 
+            GitLab servers are usually of the type gitlab.com, gitlab.in2p3.fr, or even salsa.debian.org, 
+            so you cannot discriminate solely with the string 'gitlab'.
+            """
             url = urlparse(repo_url)
             servidor = url.netloc
             bGitLab = False
+            bCodeberg = False
+            bBitbucket = False
             if process_repository.is_gitlab(servidor):
                 logging.info(f"{servidor} is GitLab.")
-                bGitLab = True
-
-            logging.info(f"DEBUG: {servidor} is_gitlab = {bGitLab}")
-            if bGitLab:
                 repo_type = constants.RepositoryType.GITLAB
+                bGitLab = True
+                logging.info(f"DEBUG: {servidor} is_gitlab = {bGitLab}")
+            elif servidor == constants.CODEBERG_DOMAIN:
+                repo_type = constants.RepositoryType.CODEBERG
+                bCodeberg = True
+                logging.info(f"DEBUG: {servidor} is_codeberg = {bCodeberg}")
+            elif "bitbucket.org" in servidor:
+                repo_type = constants.RepositoryType.BITBUCKET
+                bBitbucket = True
+           
 
+            # if bGitLab:
+            #     repo_type = constants.RepositoryType.GITLAB
+
+            logging.info("Processing repository metadata.")
             repository_metadata, owner, repo_name, def_branch, project_path = process_repository.load_online_repository_metadata(
                 repository_metadata,
                 repo_url,
@@ -89,22 +111,25 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                 authorization,
                 reconcile_authors,
                 branch=branch,
-                tag=tag
+                tag=tag,
+                commit=commit
             )
 
             # download files and obtain path to download folder
             if readme_only:
+                logging.info("Downloading README only...")
                 # download readme only with the information above
                 readme_text = process_repository.download_readme(owner, repo_name, def_branch, repo_type, authorization, project_path)
 
             elif keep_tmp is not None:  # save downloaded files locally
                 os.makedirs(keep_tmp, exist_ok=True)
                 local_folder = process_repository.download_repository_files(owner, repo_name, def_branch, repo_type,
-                                                                            keep_tmp, repo_url, authorization)
+                                                                            keep_tmp, repo_url, authorization, download_limit)
                 if local_folder is not None:
                     readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
                                                                                                repository_metadata,
-                                                                                               repo_type, owner,
+                                                                                               repo_type, 
+                                                                                               owner,
                                                                                                repo_name,
                                                                                                def_branch,
                                                                                                ignore_test_folder,
@@ -117,11 +142,12 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
               
                 with tempfile.TemporaryDirectory() as temp_dir:
                     local_folder = process_repository.download_repository_files(owner, repo_name, def_branch, repo_type,
-                                                                                temp_dir, repo_url, authorization)
+                                                                                temp_dir, repo_url, authorization, download_limit)
                     if local_folder is not None:
                         readme_text, full_repository_metadata = process_files.process_repository_files(local_folder,
                                                                                                     repository_metadata,
-                                                                                                    repo_type, owner,
+                                                                                                    repo_type, 
+                                                                                                    owner,
                                                                                                     repo_name,
                                                                                                     def_branch,
                                                                                                     ignore_test_folder,
@@ -142,7 +168,7 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
             readme_text, full_repository_metadata = process_files.process_repository_files(local_repo,
                                                                                            repository_metadata,
                                                                                            repo_type,
-                                                                                           ignore_test_folder,
+                                                                                           ignore_test_folder = ignore_test_folder,
                                                                                            reconcile_authors = reconcile_authors)
             if readme_text == "":
                 logging.warning("Warning: README document does not exist in the local repository")
@@ -160,18 +186,20 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
         # remove html comments from unfiltered text (to avoid detecting commented out (wrong) metadata
         readme_unfiltered_text = markdown_utils.remove_comments(readme_unfiltered_text)
         repository_metadata, string_list = header_analysis.extract_categories(readme_unfiltered_text,
-                                                                              repository_metadata)
+                                                                              repository_metadata,similarity_threshold)
         
         logging.info("Extracted categories from headers successfully.")
         readme_text_unmarked = markdown_utils.unmark(readme_text)
         logging.info("readme text unmarked successfully.") 
-
         if readme_text_unmarked != "":
             try:
                 readme_source = repository_metadata.results[constants.CAT_README_URL][0]
                 readme_source = readme_source[constants.PROP_RESULT][constants.PROP_VALUE]
             except:
                 readme_source = "README.md"
+                
+
+            logging.info("Extracting regular expressions...")
             repository_metadata = regular_expressions.extract_bibtex(readme_unfiltered_text, repository_metadata,
                                                                      readme_source)
             repository_metadata = regular_expressions.extract_doi_badges(readme_unfiltered_text, repository_metadata,
@@ -203,6 +231,8 @@ def cli_get_data(threshold, ignore_classifiers, repo_url=None, doc_src=None, loc
                                                                      repository_metadata, readme_source, def_branch)
             repository_metadata = regular_expressions.extract_arxiv_links(readme_unfiltered_text, repository_metadata,
                                                                           readme_source)
+            repository_metadata = regular_expressions.extract_license_badges(readme_unfiltered_text, repository_metadata, readme_source)
+
             logging.info("Completed extracting regular expressions")
 
         return repository_metadata
@@ -237,7 +267,15 @@ def run_cli(*,
             requirements_mode="all",
             reconcile_authors=False,
             branch=None,
-            tag=None
+            tag=None,
+            enrich=False,
+            github_token=None,
+            gitlab_token=None,
+            codeberg_token=None,
+            bitbucket_token=None,
+            bitbucket_email=None,
+            download_limit=None,
+            commit=None 
             ):
     """Function to run all the required components of the cli for a repository"""
     # check if it is a valid url
@@ -267,18 +305,24 @@ def run_cli(*,
             #              urls_to_process]
             for repo_url in urls_to_process:
                 try:
+                    authorization = verify_and_resolve_token(
+                        repo_url, github_token, gitlab_token, codeberg_token, bitbucket_token, bitbucket_email)
                     encoded_url = urllib.parse.quote(repo_url, safe='')
                     encoded_url = encoded_url.replace(".","") #removing dots just in case
                     repo_data = cli_get_data(threshold=threshold, ignore_classifiers=ignore_classifiers, repo_url=repo_url,
                                              ignore_github_metadata=ignore_github_metadata, readme_only=readme_only,
-                                             keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder, requirements_mode=requirements_mode,
-                                             reconcile_authors=reconcile_authors, branch=branch, tag=tag)
+                                            keep_tmp=keep_tmp, authorization=authorization, ignore_test_folder=ignore_test_folder,
+                                            requirements_mode=requirements_mode, reconcile_authors=reconcile_authors,
+                                            branch=branch, tag=tag, download_limit=download_limit,commit=commit)
                     
                     if hasattr(repo_data, "get_json"): 
                         repo_data = repo_data.get_json()
            
                     repo_data = json_export.unify_results(repo_data.results)
-                    
+
+                    if enrich:                                       
+                        repo_data = enrichment.run_enrichment(repo_data)
+
                     if output is not None:
                         output = output.replace(".json","")
                         output = output + "_" + encoded_url + ".json"
@@ -303,30 +347,96 @@ def run_cli(*,
 
     else:
         if repo_url:
+            authorization = verify_and_resolve_token(
+                repo_url, github_token, gitlab_token, codeberg_token, bitbucket_token, bitbucket_email)
             repo_data = cli_get_data(threshold=threshold, ignore_classifiers=ignore_classifiers, repo_url=repo_url,
                                      ignore_github_metadata=ignore_github_metadata, readme_only=readme_only,
-                                     keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder,
-                                     reconcile_authors=reconcile_authors,branch=branch, tag=tag)
+                                     keep_tmp=keep_tmp, authorization=authorization, ignore_test_folder=ignore_test_folder, reconcile_authors=reconcile_authors,
+                                     branch=branch, tag=tag, download_limit=download_limit, commit=commit)
         elif local_repo:
             repo_data = cli_get_data(threshold=threshold, ignore_classifiers=ignore_classifiers,
-                                     local_repo=local_repo, keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder,
-                                     reconcile_authors=reconcile_authors,branch=branch, tag=tag)
+                                     local_repo=local_repo, keep_tmp=keep_tmp,  ignore_test_folder=ignore_test_folder, reconcile_authors=reconcile_authors,
+                                     branch=branch, tag=tag, download_limit=download_limit, commit=commit)
         else:
             repo_data = cli_get_data(threshold=threshold, ignore_classifiers=ignore_classifiers,
-                                     doc_src=doc_src, keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder,
-                                     reconcile_authors=reconcile_authors,branch=branch, tag=tag)
-            
+                                     doc_src=doc_src, keep_tmp=keep_tmp, ignore_test_folder=ignore_test_folder, reconcile_authors=reconcile_authors,
+                                     branch=branch, tag=tag, download_limit= download_limit, commit=commit)
+        
         if hasattr(repo_data, "get_json"): 
             repo_data = repo_data.get_json()
 
         repo_data = json_export.unify_results(repo_data.results)
-        
+        if enrich:                                       
+            repo_data = enrichment.run_enrichment(repo_data)
+
         if output is not None:
             json_export.save_json_output(repo_data, output, missing, pretty=pretty)
         if codemeta_out is not None:
             json_export.save_codemeta_output(repo_data, codemeta_out, pretty=pretty, requirements_mode=requirements_mode)
         if google_codemeta_out is not None:
             google_codemeta_export.save_google_codemeta_output(repo_data, google_codemeta_out, pretty=pretty, requirements_mode=requirements_mode)
+def verify_and_resolve_token(repo_url, github_token, gitlab_token, codeberg_token, bitbucket_token, bitbucket_email):
+    if repo_url is None:
+        return None
+    
+    servidor = urlparse(repo_url).netloc
 
+    if process_repository.is_gitlab(servidor):
+        platform = "gitlab"
+    elif servidor == constants.CODEBERG_DOMAIN:
+        platform = "codeberg"
+    elif "bitbucket.org" in servidor:
+        platform = "bitbucket"
+    else:
+        platform = "github"
+
+    # Warnings if tokens not matching the platform of the repo
+    for p, flag in [("github", github_token), ("gitlab", gitlab_token),
+                    ("codeberg", codeberg_token), ("bitbucket", bitbucket_token)]:
+        if platform != p and flag is not None:
+            logging.warning(f"--{p}-token provided but repo is not on {p.capitalize()}. Ignoring token.")
+
+    authorization = None
+    verify_url = None
+    if platform == "github" and github_token is not None:
+        authorization = "token " + github_token
+        verify_url = "https://api.github.com/user"
+    elif platform == "gitlab" and gitlab_token is not None:
+        t = gitlab_token
+        if not t.lower().startswith("bearer "):
+            t = "Bearer " + t
+        authorization = t
+        verify_url = f"https://{servidor}/api/v4/user"
+    elif platform == "codeberg" and codeberg_token is not None:
+        authorization = "token " + codeberg_token
+        verify_url = "https://codeberg.org/api/v1/user"
+    elif platform == "bitbucket" and bitbucket_token is not None:
+        if not bitbucket_email:
+            logging.error("--bitbucket-email is required with --bitbucket-token.")
+            sys.exit(1)
+        raw = f"{bitbucket_email}:{bitbucket_token}"
+        authorization = "Basic " + base64.b64encode(raw.encode()).decode()
+        path_parts = [p for p in urlparse(repo_url).path.split('/') if p]
+        workspace = path_parts[0] if path_parts else ""
+        repo_slug = path_parts[1] if len(path_parts) > 1 else ""
+        verify_url = f"https://api.bitbucket.org/2.0/repositories/{workspace}/{repo_slug}"
+
+    if authorization is None:
+        return None
+
+    # verify
+    try:
+        resp = requests.get(verify_url, headers={constants.PROP_AUTHORIZATION: authorization}, timeout=10)
+        if resp.status_code == 401:
+            logging.error(f"{platform.capitalize()} token is invalid (401). "
+                          "Run `somef configure` or provide a correct token flag.")
+            # sys.exit(1)
+            return None 
+        elif resp.status_code == 403:
+            logging.warning(f"{platform.capitalize()} token lacks permissions (403). Proceeding anyway.")
+    except requests.RequestException as e:
+        logging.warning(f"Could not verify {platform} token: {e}. Proceeding anyway.")
+
+    return authorization
 
 

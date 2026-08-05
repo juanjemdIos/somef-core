@@ -1,12 +1,13 @@
 import json
+import logging
 import re
 from datetime import datetime
+from urllib.parse import urlparse, urlunparse
+from typing import List, Dict
 import yaml
 from dateutil import parser as date_parser
 from ..utils import constants
 from ..regular_expressions import detect_license_spdx,extract_scholarly_article_natural, extract_scholarly_article_properties
-from typing import List, Dict
-from urllib.parse import urlparse, urlunparse
 
 def save_json_output(repo_data, out_path, missing, pretty=False):
     """
@@ -22,7 +23,7 @@ def save_json_output(repo_data, out_path, missing, pretty=False):
     -------
     @return: Does not return a value
     """
-    print("Saving json data to", out_path)
+    logging.info("Saving json data to %s", out_path)
     if missing:
         # add a new key-value papir to the dictionary
         repo_data[constants.CAT_MISSING] = create_missing_fields(repo_data)
@@ -52,10 +53,12 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
     if constants.CAT_CODE_REPOSITORY in repo_data:
         code_repository = repo_data[constants.CAT_CODE_REPOSITORY][0][constants.PROP_RESULT][constants.PROP_VALUE]
 
+    codemeta_output = {
+        "@context": "https://w3id.org/codemeta/3.0",
+        "@type": ["SoftwareSourceCode", "SoftwareApplication"]
+    }
+
     author_name = None
-    if constants.CAT_OWNER in repo_data:
-        author_name = repo_data[constants.CAT_OWNER][0][constants.PROP_RESULT][constants.PROP_VALUE]
-    
     # add a check for the existence of the 'description' property, similar way to most properties in the method.
     descriptions = None
     if constants.CAT_DESCRIPTION in repo_data:
@@ -93,16 +96,6 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
 
         descriptions_text = flat_descriptions
 
-        # descriptions_text = [d[constants.PROP_RESULT][constants.PROP_VALUE] for d in selected]
-        # descriptions.sort(key=lambda x: (x[constants.PROP_CONFIDENCE] + (1 if x[constants.PROP_TECHNIQUE] == constants.GITHUB_API else 0)),
-        #                   reverse=True)
-        # descriptions_text = [x[constants.PROP_RESULT][constants.PROP_VALUE] for x in descriptions]
-
-
-    codemeta_output = {
-        "@context": "https://w3id.org/codemeta/3.0",
-        "@type": ["SoftwareSourceCode", "SoftwareApplication"]
-    }
     if constants.CAT_LICENSE in repo_data:
         # We mix the name of the license from github API with the URL of the file (if found)  
         l_result = {}
@@ -143,9 +136,12 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                 # l_result["spdx_id"] = l[constants.PROP_RESULT][constants.PROP_SPDX_ID]
 
         codemeta_output[constants.CAT_CODEMETA_LICENSE] = l_result
+
     if code_repository is not None:
         codemeta_output[constants.CAT_CODEMETA_CODEREPOSITORY] = code_repository
-        codemeta_output[constants.CAT_CODEMETA_ISSUETRACKER] = code_repository + "/issues"
+        trackers = repo_data.get(constants.CAT_ISSUE_TRACKER, [])
+        codemeta_output[constants.CAT_CODEMETA_ISSUETRACKER] = resolve_issue_tracker(trackers, code_repository)
+
     if constants.CAT_DATE_CREATED in repo_data:
         value = repo_data[constants.CAT_DATE_CREATED][0][constants.PROP_RESULT][constants.PROP_VALUE]
         if value:
@@ -154,6 +150,14 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
         value = repo_data[constants.CAT_DATE_UPDATED][0][constants.PROP_RESULT][constants.PROP_VALUE]
         if value:
             codemeta_output[constants.CAT_CODEMETA_DATEMODIFIED] = format_date(value)
+    if constants.CAT_COPYRIGHT in repo_data:
+        holder = repo_data[constants.CAT_COPYRIGHT][0][constants.PROP_RESULT][constants.PROP_VALUE]
+        year = repo_data[constants.CAT_COPYRIGHT][0][constants.PROP_RESULT].get(constants.PROP_YEAR)
+        if holder:
+            codemeta_output[constants.CAT_CODEMETA_COPYRIGHTHOLDER] = holder
+
+        if year:
+            codemeta_output[constants.CAT_CODEMETA_COPYRIGHTYEAR] = year    
     if constants.CAT_DOWNLOAD_URL in repo_data:
         codemeta_output[constants.CAT_CODEMETA_DOWNLOADURL] = repo_data[constants.CAT_DOWNLOAD_URL][0][constants.PROP_RESULT][constants.PROP_VALUE]
     if constants.CAT_NAME in repo_data:
@@ -161,7 +165,6 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
     if constants.CAT_LOGO in repo_data:
         codemeta_output[constants.CAT_CODEMETA_LOGO] = repo_data[constants.CAT_LOGO][0][constants.PROP_RESULT][constants.PROP_VALUE]
     if constants.CAT_KEYWORDS in repo_data:
-        # codemeta_output[constants.CAT_CODEMETA_KEYWORDS] = repo_data[constants.CAT_KEYWORDS][0][constants.PROP_RESULT][constants.PROP_VALUE]
         codemeta_output[constants.CAT_CODEMETA_KEYWORDS] = []
         for key in repo_data[constants.CAT_KEYWORDS]:
             key_value = key[constants.PROP_RESULT][constants.PROP_VALUE]
@@ -200,6 +203,7 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                     codemeta_output[constants.CAT_CODEMETA_PROGRAMMINGLANGUAGE].append(value)
 
     if constants.CAT_REQUIREMENTS in repo_data:
+
         code_parser_requirements = []
         seen_structured = set()
         for x in repo_data[constants.CAT_REQUIREMENTS]:
@@ -246,6 +250,7 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                     other_requirements.append(value)
                     seen_text.add(normalized)
 
+  
         if requirements_mode == "v":
             codemeta_output[constants.CAT_CODEMETA_SOFTWAREREQUIREMENTS] = code_parser_requirements
         else:
@@ -253,6 +258,7 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                 codemeta_output[constants.CAT_CODEMETA_SOFTWAREREQUIREMENTS] = code_parser_requirements
             else:
                 codemeta_output[constants.CAT_CODEMETA_SOFTWAREREQUIREMENTS] = other_requirements
+
 
     if constants.CAT_CONTINUOUS_INTEGRATION in repo_data:
         codemeta_output[constants.CAT_CODEMETA_CONTINUOUSINTEGRATION] = repo_data[constants.CAT_CONTINUOUS_INTEGRATION][0][constants.PROP_RESULT][constants.PROP_VALUE]
@@ -308,31 +314,7 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
         # remove duplicates and generate codemeta
         install_links = list(set(install_links))
         codemeta_output[constants.CAT_CODEMETA_BUILDINSTRUCTIONS] = install_links
-    if constants.CAT_OWNER in repo_data:
-        # if user then person, otherwise organization
-        codemeta_authors = []
-        for owner in repo_data[constants.CAT_OWNER]: 
-            result_owner = owner.get("result", {})
-            type_aux = repo_data[constants.CAT_OWNER][0][constants.PROP_RESULT][constants.PROP_TYPE]
-            if type_aux == "User":
-                type_aux = "Person"
-
-            author_obj = { "@type": type_aux }
-
-            if "name" in result_owner and result_owner[constants.PROP_AUTHOR_NAME]:
-                author_obj[constants.PROP_AUTHOR_NAME] = result_owner[constants.PROP_AUTHOR_NAME]
-            if "value" in result_owner and result_owner[constants.PROP_VALUE]:
-                author_obj[constants.PROP_IDENTIFIER] = result_owner[constants.PROP_VALUE]          
-                author_obj["@id"] = "https://github.com/" + result_owner[constants.PROP_VALUE]
-            if "affiliation" in result_owner and result_owner[constants.PROP_AFFILIATION]:
-                author_obj[constants.PROP_AFFILIATION] = result_owner[constants.PROP_AFFILIATION]
-            if "email" in result_owner and result_owner[constants.PROP_EMAIL]:
-                author_obj[constants.PROP_EMAIL] = result_owner[constants.PROP_EMAIL]
-
-            codemeta_authors.append(author_obj)
-
-        if codemeta_authors: 
-            codemeta_output[constants.CAT_CODEMETA_AUTHOR] = codemeta_authors
+    
 
     if constants.CAT_AUTHORS in repo_data:
         if "author" not in codemeta_output:
@@ -353,6 +335,10 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
             if type_author == "Organization":
                 if name_author:
                     author_l['name'] = name_author
+                elif value_author:
+                    author_l['name'] = value_author
+                if author[constants.PROP_RESULT].get('email'):
+                    author_l['email'] = author[constants.PROP_RESULT].get('email')
             else:
                 family_name = None
                 given_name = None
@@ -373,7 +359,14 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                     author_l['name'] = value_author
 
             existing_authors = codemeta_output.get(constants.CAT_CODEMETA_AUTHOR, [])
-            existing = next((a for a in existing_authors if a.get("name") == author_l["name"]), None)
+            # existing = next((a for a in existing_authors if a.get("name") == author_l["name"]), None)
+            existing = next(
+                        (a for a in existing_authors
+                        if (author_l.get("name") and a.get("name") == author_l.get("name"))
+                        or (author_l.get("email") and a.get("email") == author_l.get("email"))
+                        or (author_l.get("name") and a.get(constants.PROP_IDENTIFIER) == value_author)),
+                        None
+                    )
 
             if existing:
                 for key, val in author_l.items():
@@ -384,55 +377,133 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
             # if not any(a.get('name') == author_l['name'] for a in existing_authors):
             #     codemeta_output[constants.CAT_CODEMETA_AUTHOR].append(author_l)
 
+    if constants.CAT_OWNER in repo_data:
+            # if user then person, otherwise organization
+            codemeta_authors = []
+            codemeta_owners = []
+            for owner in repo_data[constants.CAT_OWNER]: 
+                result_owner = owner.get("result", {})
+                type_aux = repo_data[constants.CAT_OWNER][0][constants.PROP_RESULT][constants.PROP_TYPE]
+                if type_aux == "User":
+                    type_aux = "Person"
 
-    if constants.CAT_CITATION in repo_data:
-        # url_cit = []
-        codemeta_output[constants.CAT_CODEMETA_REFERENCEPUBLICATION] = []
-        all_reference_publications = []
-        # scholarlyArticles = {}
-        author_orcids = {}
-
-        for cit in repo_data[constants.CAT_CITATION]:
-            scholarlyArticle = {"@type": "ScholarlyArticle"} 
-
-            doi = None
-            title = None
-            is_bibtex = False
-
-            if constants.PROP_FORMAT in cit[constants.PROP_RESULT] and cit[constants.PROP_RESULT][constants.PROP_FORMAT] == "cff":
-                yaml_content = yaml.safe_load(cit[constants.PROP_RESULT]["value"])
-                preferred_citation = yaml_content.get("preferred-citation", {})
-                doi = yaml_content.get("doi") or preferred_citation.get("doi")
-                identifiers = yaml_content.get("identifiers", [])
-                url_citation = preferred_citation.get("url") or yaml_content.get("url")
-                identifier_url = next((id["value"] for id in identifiers if id["type"] == "url"), None)
-                identifier_doi = next((id["value"] for id in identifiers if id["type"] == "doi"), None)
-
-                authors = yaml_content.get("authors", [])
-
-                title = normalize_title(preferred_citation.get("title") or yaml_content.get("title"))
-
-                if identifier_doi:
-                    final_url = f"https://doi.org/{identifier_doi}"
-                elif doi:
-                    final_url = f"https://doi.org/{doi}"
-                elif identifier_url:
-                    final_url = identifier_url
-                elif url_citation:
-                    final_url = url_citation
+                if type_aux == "Organization":
+                    owner_obj = {"@type": "Organization"}
+                    if result_owner.get(constants.PROP_VALUE):
+                        owner_obj["name"] = result_owner.get(constants.PROP_VALUE)
+                    codemeta_owners.append(owner_obj)
                 else:
-                    final_url = ''
+                    author_obj = { "@type": type_aux }
 
-                scholarlyArticle[constants.PROP_NAME] = title 
-                scholarlyArticle[constants.CAT_IDENTIFIER] = doi 
-                scholarlyArticle[constants.PROP_URL] = final_url
+                    if "name" in result_owner and result_owner[constants.PROP_AUTHOR_NAME]:
+                        author_obj[constants.PROP_AUTHOR_NAME] = result_owner[constants.PROP_AUTHOR_NAME]
+                    if "value" in result_owner and result_owner[constants.PROP_VALUE]:
+                        author_obj[constants.PROP_IDENTIFIER] = result_owner[constants.PROP_VALUE]          
+                        author_obj["@id"] = "https://github.com/" + result_owner[constants.PROP_VALUE]
+                    if "affiliation" in result_owner and result_owner[constants.PROP_AFFILIATION]:
+                        author_obj[constants.PROP_AFFILIATION] = result_owner[constants.PROP_AFFILIATION]
+                    if "email" in result_owner and result_owner[constants.PROP_EMAIL]:
+                        author_obj[constants.PROP_EMAIL] = result_owner[constants.PROP_EMAIL]
+
+                    existing = codemeta_output.get(constants.CAT_CODEMETA_AUTHOR, [])
+                    if existing:
+                        if existing[0].get("@type") == author_obj.get("@type"):
+                            # ernich the existing author
+                            for key, val in author_obj.items():
+                                if key not in existing[0] or not existing[0][key]:
+                                    existing[0][key] = val
+                    else:
+                        codemeta_authors.append(author_obj)
+
+            if codemeta_owners:
+                codemeta_output[constants.CAT_CODEMETA_OWNER] = codemeta_owners
+
+            if codemeta_authors: 
+                codemeta_output[constants.CAT_CODEMETA_AUTHOR] = codemeta_authors
+                
+    if constants.CAT_CITATION in repo_data:
+        codemeta_output[constants.CAT_CODEMETA_REFERENCEPUBLICATION] = []
+        credit_text_list = []
+        author_orcids = {}
+        all_reference_publications = []
+
+        if constants.CAT_CITATION in repo_data:
+            publications_source = repo_data[constants.CAT_CITATION]
+        else:
+            publications_source = []
+
+        if publications_source:
+            for cit in publications_source:
+                cit_result = cit[constants.PROP_RESULT]
+                scholarlyArticle = {"@type": "ScholarlyArticle"} 
+                authors = cit_result.get("author", [])
+                doi = None
+                identifier_doi = None
+                title = None
+                is_bibtex = False
+
+                if constants.PROP_FORMAT in cit[constants.PROP_RESULT] and cit[constants.PROP_RESULT][constants.PROP_FORMAT] == "cff":
+                    # yaml_content = yaml.safe_load(cit[constants.PROP_RESULT]["value"])
+                    cff_value = cit[constants.PROP_RESULT]["value"]
+                    try:
+                        yaml_content = yaml.safe_load(cff_value) 
+                    except Exception:
+                        # Remove HTML tags that can break YAML parsing
+                        # ej:" <a href="..."> " has unescaped quotes
+                        cleaned = re.sub(constants.REGEXP_CLEAN_HTML_TAGS, '', cff_value)
+                        yaml_content = yaml.safe_load(cleaned)
+
+                    preferred_citation = yaml_content.get("preferred-citation", {})
+                    doi = yaml_content.get("doi") or preferred_citation.get("doi")
+                    identifiers = yaml_content.get("identifiers", [])
+                    url_citation = preferred_citation.get("url") or yaml_content.get("url")
+                    identifier_url = next((id["value"] for id in identifiers if id["type"] == "url"), None)
+                    identifier_doi = next((id["value"] for id in identifiers if id["type"] == "doi"), None)
+                    if not authors:
+                        authors = yaml_content.get("authors", []) or preferred_citation.get("authors", [])
+                    title = normalize_title(preferred_citation.get("title") or yaml_content.get("title"))
+
+
+                    if identifier_doi:
+                        final_url = f"https://doi.org/{identifier_doi}"
+                    elif doi:
+                        final_url = f"https://doi.org/{doi}"
+                    elif identifier_url:
+                        final_url = identifier_url
+                    elif url_citation:
+                        final_url = url_citation
+                    else:
+                        final_url = ''
+
+                    scholarlyArticle[constants.PROP_NAME] = title 
+                    scholarlyArticle[constants.CAT_IDENTIFIER] = doi 
+                    scholarlyArticle[constants.PROP_URL] = final_url
+
+                else:
+                    if constants.PROP_DOI in cit[constants.PROP_RESULT].keys():
+                        doi = cit[constants.PROP_RESULT][constants.PROP_DOI]
+                        scholarlyArticle[constants.CAT_IDENTIFIER] = cit[constants.PROP_RESULT][constants.PROP_DOI]
+
+                    if constants.PROP_URL in cit[constants.PROP_RESULT].keys():
+                        scholarlyArticle[constants.PROP_URL] = cit[constants.PROP_RESULT][constants.PROP_URL]
+
+                    if constants.PROP_TITLE in cit[constants.PROP_RESULT].keys():
+                        title = normalize_title(cit[constants.PROP_RESULT][constants.PROP_TITLE])
+                        scholarlyArticle[constants.PROP_NAME] = cit[constants.PROP_RESULT][constants.PROP_TITLE]    
+
+                    if constants.PROP_ORIGINAL_HEADER in cit[constants.PROP_RESULT].keys():
+                        if cit[constants.PROP_RESULT][constants.PROP_ORIGINAL_HEADER] == "Citation":
+                            if constants.PROP_SOURCE in cit.keys():
+                                scholarlyArticle[constants.PROP_URL] = cit[constants.PROP_SOURCE]
+
+                    is_bibtex = True
 
                 author_list = []
                 for author in authors:
-                    family_name = author.get("family-names")
-                    given_name = author.get("given-names")
-                    orcid = author.get("orcid")
-                    name = author.get("name")
+                    family_name = author.get(constants.PROP_FAMILY_NAME)
+                    given_name = author.get(constants.PROP_GIVEN_NAME)
+                    orcid = author.get("orcid") or author.get(constants.PROP_URL)
+                    name = author.get(constants.PROP_NAME)
 
                     if family_name and given_name:
                         author_entry = {
@@ -452,6 +523,8 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
                             "@type": "Organization",
                             "name": name
                         }
+                    else:
+                        continue
 
                     if family_name and given_name and orcid:
                         key = (family_name.lower(), given_name.lower())
@@ -461,48 +534,40 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
 
                 if author_list:
                     scholarlyArticle[constants.PROP_AUTHOR] = author_list 
-            else:
-                if constants.PROP_DOI in cit[constants.PROP_RESULT].keys():
-                    doi = cit[constants.PROP_RESULT][constants.PROP_DOI]
-                    scholarlyArticle[constants.CAT_IDENTIFIER] = cit[constants.PROP_RESULT][constants.PROP_DOI]
 
-                if constants.PROP_URL in cit[constants.PROP_RESULT].keys():
-                    scholarlyArticle[constants.PROP_URL] = cit[constants.PROP_RESULT][constants.PROP_URL]
+                if len(scholarlyArticle) > 1:  
 
-                if constants.PROP_TITLE in cit[constants.PROP_RESULT].keys():
-                    title = normalize_title(cit[constants.PROP_RESULT][constants.PROP_TITLE])
-                    scholarlyArticle[constants.PROP_NAME] = cit[constants.PROP_RESULT][constants.PROP_TITLE]    
+                    is_article = is_scholarly_article(cit_result)
 
-                if constants.PROP_ORIGINAL_HEADER in cit[constants.PROP_RESULT].keys():
-                    if cit[constants.PROP_RESULT][constants.PROP_ORIGINAL_HEADER] == "Citation":
-                        if constants.PROP_SOURCE in cit.keys():
-                            scholarlyArticle[constants.PROP_URL] = cit[constants.PROP_SOURCE]
+                    if not is_article:
+                        if authors or title or doi or identifier_doi:
+                            credit_str = format_to_credit_text(authors, title, doi, identifier_doi,repo_link=code_repository)
+                            credit_text_list.append(credit_str)
+                    else:
+                        # look por information in values as pagination, issn and others
+                        if re.search(r'@\w+\{', cit[constants.PROP_RESULT][constants.PROP_VALUE]):  
+                            scholarlyArticle = extract_scholarly_article_properties(cit[constants.PROP_RESULT][constants.PROP_VALUE], scholarlyArticle, 'CODEMETA')
+                        else:
+                            scholarlyArticle = extract_scholarly_article_natural(cit[constants.PROP_RESULT][constants.PROP_VALUE], scholarlyArticle, 'CODEMETA')
 
-                is_bibtex = True
+                        all_reference_publications.append({
+                            **scholarlyArticle,
+                            "_source_format": "cff" if not is_bibtex else "bibtex"
+                        })
 
-            if len(scholarlyArticle) > 1:  
-                # look por information in values as pagination, issn and others
-                if re.search(r'@\w+\{', cit[constants.PROP_RESULT][constants.PROP_VALUE]):  
-                    scholarlyArticle = extract_scholarly_article_properties(cit[constants.PROP_RESULT][constants.PROP_VALUE], scholarlyArticle, 'CODEMETA')
-                else:
-                    scholarlyArticle = extract_scholarly_article_natural(cit[constants.PROP_RESULT][constants.PROP_VALUE], scholarlyArticle, 'CODEMETA')
+            for article in all_reference_publications:
+                if "author" in article:
+                    for author in article["author"]:
+                        family_name = author.get("familyName", "").strip()
+                        given_name = author.get("givenName", "").strip()
+                        key = (family_name.lower(), given_name.lower()) if given_name else None
 
-                all_reference_publications.append({
-                    **scholarlyArticle,
-                    "_source_format": "cff" if not is_bibtex else "bibtex"
-                })
+                        if key and key in author_orcids:
+                            author["@id"] = author_orcids[key] 
 
-        for article in all_reference_publications:
-            if "author" in article:
-                for author in article["author"]:
-                    family_name = author.get("familyName", "").strip()
-                    given_name = author.get("givenName", "").strip()
-                    key = (family_name.lower(), given_name.lower()) if given_name else None
-
-                    if key and key in author_orcids:
-                        author["@id"] = author_orcids[key]  
-     
-        codemeta_output[constants.CAT_CODEMETA_REFERENCEPUBLICATION] = deduplicate_publications(all_reference_publications)
+            codemeta_output[constants.CAT_CODEMETA_REFERENCEPUBLICATION] = deduplicate_publications(all_reference_publications)
+            if credit_text_list:
+                codemeta_output[constants.CAT_CODEMETA_CREDITTEXT] = list(set(credit_text_list)) 
 
     if constants.CAT_STATUS in repo_data:
         url_status = repo_data[constants.CAT_STATUS][0]['result'].get('value', '')
@@ -510,6 +575,13 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
         if status:
             codemeta_output[constants.CAT_CODEMETA_DEVELOPMENTSTATUS] = status
 
+    if constants.CAT_APPLICATION_DOMAIN in repo_data:
+        codemeta_output[constants.CAT_CODEMETA_APPLICATIONCATEGORY] = []
+        for domain in repo_data[constants.CAT_APPLICATION_DOMAIN]:
+            value = domain[constants.PROP_RESULT][constants.PROP_VALUE]
+            if value not in codemeta_output[constants.CAT_CODEMETA_APPLICATIONCATEGORY]:
+                codemeta_output[constants.CAT_CODEMETA_APPLICATIONCATEGORY].append(value)
+                
     if constants.CAT_IDENTIFIER in repo_data:
         codemeta_output[constants.CAT_CODEMETA_IDENTIFIER] = []
 
@@ -542,7 +614,7 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
     #     codemeta_output["identifier"] = repo_data[constants.CAT_IDENTIFIER][0][constants.PROP_RESULT][constants.PROP_VALUE]
     if constants.CAT_README_URL in repo_data:
         codemeta_output[constants.CAT_CODEMETA_README] = repo_data[constants.CAT_README_URL][0][constants.PROP_RESULT][constants.PROP_VALUE]
-    
+
     if constants.CAT_MAINTAINER in repo_data:
         codemeta_maintainers = []
         for maintainer in repo_data[constants.CAT_MAINTAINER]:
@@ -575,8 +647,29 @@ def save_codemeta_output(repo_data, outfile, pretty=False, requirements_mode='al
         if runtimes:
             codemeta_output[constants.CAT_CODEMETA_RUNTIMEPLATFORM] = ", ".join(runtimes)
 
-    # if "contributors" in repo_data:
-    #     codemeta_output["contributor"] = data_path(["contributors", "excerpt"])
+    if constants.CAT_CONTRIBUTORS in repo_data:
+        raw_contributors = repo_data[constants.CAT_CONTRIBUTORS]
+        codemeta_output[constants.CAT_CODEMETA_CONTRIBUTOR] = parse_contributors(raw_contributors)
+
+    if constants.CAT_APPLICATION_DOMAIN in repo_data:
+        application_categories = []
+        for entry in repo_data[constants.CAT_APPLICATION_DOMAIN]:
+            value = entry[constants.PROP_RESULT][constants.PROP_VALUE]
+            if value not in application_categories:
+                application_categories.append(value)
+        if application_categories:
+            codemeta_output[constants.CAT_CODEMETA_APPLICATIONCATEGORY] = application_categories
+
+    if constants.CAT_FUNDING in repo_data:
+        for funding_entry in repo_data[constants.CAT_FUNDING]:
+            res_fun = funding_entry[constants.PROP_RESULT]
+
+            if constants.PROP_FUNDING in res_fun and res_fun[constants.PROP_FUNDING] != "": 
+                codemeta_output[constants.CAT_CODEMETA_FUNDING] = res_fun[constants.PROP_FUNDING]
+
+            if constants.PROP_FUNDER in res_fun and res_fun[constants.PROP_FUNDER] != "":
+                codemeta_output[constants.CAT_CODEMETA_FUNDER] = res_fun[constants.PROP_FUNDER]
+
     # A person is expected, and we extract text at the moment
     if descriptions_text:
         codemeta_output[constants.CAT_CODEMETA_DESCRIPTION] = descriptions_text
@@ -635,9 +728,8 @@ def deduplicate_publications(publications: List[Dict]) -> List[Dict]:
             # is_doi_url_existing = existing_url.startswith("https://doi.org/")
             # is_doi_url_new = new_url.startswith("https://doi.org/")
             doi_existing = extract_doi(existing_url)
-            # print(f'-----> DOI existing: {doi_existing}')
             doi_new = extract_doi(new_url)
-            # print(f'-----> DOI existing: {doi_new}')
+
             is_doi_url_existing = bool(doi_existing)
             is_doi_url_new = bool(doi_new)
 
@@ -665,7 +757,6 @@ def extract_doi(url: str) -> str:
     match = re.search(constants.REGEXP_ALL_DOIS, url, re.IGNORECASE)
     return match.group(0).lower() if match else ""
 
-
 def map_requirement_type(t):
     """
     Maps a free text requirement type to a Schema.org software (soft application, soft source....) 
@@ -679,6 +770,142 @@ def map_requirement_type(t):
     # default
     return constants.SCHEMA_SOFTWARE_APPLICATION
 
+def parse_contributors(raw):
+    contributors = []
+    seen = set()
+
+    for entry in raw:
+        result = entry.get("result", {})
+        rtype = result.get("type")
+        name = result.get("value")
+
+        if not name:
+            continue
+
+        if rtype == "Agent":
+
+            if name not in seen:
+
+                if re.search(constants.REGEXP_LTD_INC, name, re.IGNORECASE):
+                    type_contributor = constants.TYPE_CONTRIBUTOR_ORGANIZATION
+                else:
+                    type_contributor = constants.TYPE_CONTRIBUTOR_PERSON
+
+                contributor = {
+                    constants.PROP_CODEMETA_TYPE: type_contributor,
+                    constants.PROP_NAME: name
+                }
+
+                if "given_name" in result:
+                    contributor[constants.PROP_CODEMETA_GIVENAME] = result["given_name"]
+
+                if "last_name" in result:
+                    contributor[constants.PROP_CODEMETA_FAMILYNAME] = result["last_name"]
+
+                if "email" in result:
+                    contributor[constants.PROP_EMAIL] = result["email"]
+
+                if "identifier" in result:
+                    contributor[constants.PROP_CODEMETA_ID] = result["identifier"]
+
+                contributors.append(contributor)
+                seen.add(name)
+
+        if rtype == "File_dump":
+            for line in result.get("value", "").splitlines():
+                line = line.strip()
+
+                if (not line or line.startswith(("#", "##", "|")) or "[" in line):
+                    continue
+
+                # avoid sentences
+                if len(line.split()) > 4: 
+                    continue
+
+                if line in seen:
+                    continue
+
+                if re.search(constants.REGEXP_LTD_INC, line, re.IGNORECASE):
+                    type_contributor = constants.TYPE_CONTRIBUTOR_ORGANIZATION
+                else:
+                    type_contributor = constants.TYPE_CONTRIBUTOR_PERSON
+
+                contributors.append({
+                    constants.PROP_CODEMETA_TYPE: type_contributor,
+                    constants.PROP_NAME: line
+                })
+
+                seen.add(line)
+
+
+    return contributors
+
+
+def is_scholarly_article(article_dict):
+
+    if article_dict.get("doi") or article_dict.get("journal"):
+        return True
+    if article_dict.get("type") in ["SoftwareApplication", "software"]:
+        return False
+    if article_dict.get("type") == "ScholarlyArticle":
+        return True
+        
+    return False
+
+
+def format_to_credit_text(authors, title, doi_or_url, identifier_doi = None, repo_link=None):
+
+    if authors:
+        author_names = []
+        for a in authors:
+            f = a.get("family-names") or a.get("family_name")
+            g = a.get("given-names") or a.get("given_name")
+            if f and g:
+                author_names.append(f"{f}, {g[0]}.")
+        
+        # too many authors
+        if len(author_names) > 5:
+            authors_str = ", ".join(author_names[:5]) + ", et al."
+        else:
+            authors_str = ", ".join(author_names)
+    else:
+        authors_str = "Unknown Authors"
+
+    final_id = identifier_doi if identifier_doi else doi_or_url
+
+    credit_str = f"{authors_str} ({title}). {final_id if final_id else ''}"
+
+    if repo_link:
+        credit_str = f"{credit_str.rstrip('. ')}. Available at: {repo_link}"
+
+    return credit_str
+
+def resolve_issue_tracker(trackers, code_repository):
+    
+    if len(trackers) == 1:
+        return trackers[0][constants.PROP_RESULT][constants.PROP_VALUE]
+    
+    if len(trackers) > 1:
+        return select_best_tracker(trackers)
+    
+    if code_repository:
+        return f"{code_repository}/issues"
+        
+    return None
+
+def select_best_tracker(trackers):
+
+    try:
+        for t in trackers:
+            result = t.get(constants.PROP_RESULT, {})
+            if isinstance(result, dict):
+                url = result.get(constants.PROP_VALUE)
+                if url and "api." not in url:
+                    return url
+
+        return trackers[0][constants.PROP_RESULT][constants.PROP_VALUE]
+    except Exception:
+        return None
 
 """
 This part of code implements the post processing and unification logic applied to the
@@ -700,6 +927,10 @@ def canonicalize_value(value, value_type):
        - Otherwise, unify to scheme://domain (documentation, badges, pages)
        - Always remove query, fragment, trailing slash
     """
+    if isinstance(value, (list, dict)):
+        logging.warning(f"Warning: Unexpected structured value for type {value_type}. Skipping canonicalization.")
+        return value
+    
     if value_type == constants.RELEASE:
         return value
     
@@ -716,6 +947,10 @@ def canonicalize_value(value, value_type):
             clean_path = path
             return urlunparse((parsed.scheme, parsed.netloc, clean_path, '', '', ''))
 
+        domains_to_keep_path = ['github.com', 'api.github.com', 'gitlab.com', 'bitbucket.org']
+        if any(d in parsed.netloc for d in domains_to_keep_path):
+            return urlunparse((parsed.scheme, parsed.netloc, path, '', '', ''))
+        
         # It's a directory/page → unify to domain
         return f"{parsed.scheme}://{parsed.netloc}"
 
@@ -759,7 +994,6 @@ def unify_results(repo_data: dict) -> dict:
     This function canonicalizes simple values, detects equivalent items
     and merges them into a single unified entry while preserving all available information.
     """
-    print("Unifying results...")
     unified_data = {}
 
     for category, items in repo_data.items():
@@ -770,32 +1004,98 @@ def unify_results(repo_data: dict) -> dict:
         seen = {}
 
         for item in items:
+            
             result = item.get(constants.PROP_RESULT, {})
             normalized_type = normalize_type(result)
             result[constants.PROP_TYPE] = normalized_type
             value = result.get(constants.PROP_VALUE)
             value_type = result.get(constants.PROP_TYPE)
+            
+            # Descriptions of <5 words should probably be removed
+            if category == constants.CAT_DESCRIPTION:
+                value = result.get(constants.PROP_VALUE, "")
+                source = item.get(constants.PROP_SOURCE, "")
+                if isinstance(value, str) and len(value.split()) < 5:
+                    if isinstance(source, str) and "readme" in source.lower():
+                        continue
+                    
+            # --- SPECIAL LOGIC FOR LICENSES and citations ---
+            if category == constants.CAT_LICENSE and result.get(constants.PROP_SPDX_ID):
+                # If we have SPDX, that is our unification key
+                key = f"LICENSE-{result[constants.PROP_SPDX_ID]}"
+            elif category == constants.CAT_CITATION:
+                doi_citation = result.get("doi")
+                if not doi_citation:
+                    # if result.get("format") == "bibtex" or item.get("technique") == "header_analysis":
+                    doi_citation = extract_doi(result.get(constants.PROP_VALUE, ""))
 
-            canonical = canonicalize_value(value, value_type)
+                if doi_citation:
+                    clean_doi = extract_doi(doi_citation).lower().strip()
+                    key = f"CITATION-DOI-{clean_doi}"
+                    # result.pop(constants.PROP_FORMAT, None)
+                else:
+                    canonical = canonicalize_value(value, value_type)
+                    key = str(canonical)
+            elif category == constants.CAT_REQUIREMENTS:  
+                req_name = result.get("name", "").strip().lower()
+                req_version = result.get("version", "").strip()
+                if req_name:
+                    key = f"REQ-{req_name}-{req_version}"
+                else:
+                    canonical = canonicalize_value(value, value_type)
+                    key = str(canonical)
+            elif category == constants.CAT_RUNTIME_PLATFORM:
+                rt_name = result.get("name", "").strip().lower()
+                rt_version = result.get("version", "").strip()
+                if rt_name:
+                    key = f"RT-{rt_name}-{rt_version}"
+                else:
+                    canonical = canonicalize_value(value, value_type)
+                    key = str(canonical)
+            else:
+                # Normal behavior for the rest of the categories
+                canonical = canonicalize_value(value, value_type)
+                key = str(canonical)
+            # --------------------------------------------------
+            # canonical = canonicalize_value(value, value_type)
 
-            key = str(canonical)
-
+            # key = str(canonical)
             if key in seen:
                 existing = seen[key]
-
-                # If types match, merge normally
-                existing[constants.PROP_RESULT][constants.PROP_VALUE] = choose_more_general(
-                    existing[constants.PROP_RESULT][constants.PROP_VALUE], value
-                )
+   
+                if category == constants.CAT_CITATION:
+                    priorities_citation = {"cff": 3, "codemeta": 2, "bibtex": 1}
+                    new_fmt_citation = result.get(constants.PROP_FORMAT, "").lower()
+                    old_fmt_citation = existing[constants.PROP_RESULT].get(constants.PROP_FORMAT, "").lower()
+                if category == constants.CAT_LICENSE:
+                    # prefer SPDX ID if available for licenses
+                    if result.get(constants.PROP_SPDX_ID):
+                        existing[constants.PROP_RESULT][constants.PROP_VALUE] = result[constants.PROP_SPDX_ID]
+                else:
+                    # If types match, merge normally
+                    existing[constants.PROP_RESULT][constants.PROP_VALUE] = choose_more_general(
+                        existing[constants.PROP_RESULT][constants.PROP_VALUE], value
+                    )
 
                 # merge other result fields because different techniques might have extracted different information 
                 # (e.g., email in authors extracted by file exploration or code parser.
                 for field, new_val in result.items():
                     if field in (constants.PROP_VALUE, constants.PROP_TYPE):
-                        continue  
+                        continue 
                     old_val = existing[constants.PROP_RESULT].get(field)
-                    if old_val in (None, "", []):
+                    should_overwrite = False
+
+                    if category == constants.CAT_CITATION:
+                        should_overwrite = (
+                            priorities_citation.get(new_fmt_citation, 0) > priorities_citation.get(old_fmt_citation, 0)
+                        )
+
+                    if old_val in (None, "", []) or should_overwrite:
                         existing[constants.PROP_RESULT][field] = new_val
+                if category == constants.CAT_CITATION:
+                    existing[constants.PROP_RESULT].pop(constants.PROP_FORMAT, None)
+                # if category == constants.CAT_CITATION and "CITATION-DOI-" in key:
+                #     existing[constants.PROP_RESULT].pop(constants.PROP_FORMAT, None)
 
                 # join techniques
                 t1 = existing.get("technique", [])

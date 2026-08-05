@@ -156,7 +156,7 @@ class TestJSONExport(unittest.TestCase):
             "doi" in entry.get("result", {}) and
             "title" in entry.get("result", {})
             for entry in citation
-        ), "Citation.cff must have doi and title"
+        ), "Citation.cff must have doi and title in the result"
 
         # os.remove(test_data_path + "test_issue_629.json")
 
@@ -205,6 +205,9 @@ class TestJSONExport(unittest.TestCase):
         json_content = json.loads(data)
 
         licenses = json_content["license"]
+
+        # print('---------------------------')
+        # print(licenses)
 
         for i, license_entry in enumerate(licenses):
             assert "spdx_id" in license_entry["result"], f"Missing 'spdx_id' in license{i}"
@@ -304,6 +307,7 @@ class TestJSONExport(unittest.TestCase):
       
         found = False  
         homepage_entries = data.get("homepage", [])
+
         for item in homepage_entries:
             technique = item.get("technique")
             result = item.get("result", {})
@@ -465,6 +469,7 @@ class TestJSONExport(unittest.TestCase):
 
         os.remove(test_data_path + "test-859.json")
 
+
     def test_issue_723(self):
         """Checks if we exract the maintainers in the Codemeta output from the CODEOWNERS file. 
         But without -ai flag because requiere real requests to GitHub API and we want to avoid that in the tests. 
@@ -496,7 +501,7 @@ class TestJSONExport(unittest.TestCase):
         
         os.remove(test_data_path + "test_issue_723.json")
 
-
+   
     def test_unify_json(self):
         """
         Checks that duplicated requirement entries extracted by different techniques
@@ -523,6 +528,7 @@ class TestJSONExport(unittest.TestCase):
             json_content = json.load(f)
 
         requirements = json_content.get(constants.CAT_REQUIREMENTS, [])
+        # print(json.dumps(requirements, indent=2))
 
         unified_reqs = [ r for r in requirements if "You will need Java 1.8" in r["result"].get("value", "") ]
         assert unified_reqs, "There should be at least one unified Java requirement entry" 
@@ -531,6 +537,7 @@ class TestJSONExport(unittest.TestCase):
         assert set(req["technique"]) == {"code_parser", "header_analysis"},"Techniques should be merged from both extractors"
 
         os.remove(test_data_path + "test_widoco_unify.json")
+       
 
     def test_unify_json_2(self):
         """
@@ -578,6 +585,72 @@ class TestJSONExport(unittest.TestCase):
 
 
         os.remove(test_data_path + "test_somef_unify.json")
+
+    
+
+    def test_new_properties_citation_issue_935(self):
+        """
+        Checks that duplicated requirement entries extracted by different techniques
+        are unified into a single item, preserving all complementary information
+        (techniques, sources, and result fields).
+        """
+
+        output_path = test_data_path + 'test_new_properties_citation_issue_935.json'
+
+        somef_cli.run_cli(  threshold=0.8,
+                            local_repo=test_data_repositories + "somef_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+
+
+        with open(output_path, "r") as f:
+            json_content = json.load(f)
+
+        citations = json_content.get(constants.CAT_CITATION, [])
+
+       # We omit 'is_preferred_citation: False'.
+       # we use just the flag is_preferred_citation: True to identify the preferred citation.
+        software_entry = next(
+            (cit for cit in citations if not cit["result"].get("is_preferred_citation") and 
+            cit["result"].get("type") == "SoftwareApplication"),
+            None
+        )
+        preferred_entry = next(
+            (cit for cit in citations if str(cit["result"].get("is_preferred_citation")) == "True"),
+            None
+        )
+
+        assert software_entry is not None, "Software citation (root) not found"
+        sw_result = software_entry["result"]
+        assert sw_result["title"] == 'SOMEF: Software metadata extraction framework'
+        # assert sw_result["version"] == "0.1.0"
+        assert "doi" not in sw_result or sw_result.get("doi") is None # it is in preferred (referencePublication) but not in the root
+
+        assert preferred_entry is not None, "Preferred citation (article) not found"
+        pref_result = preferred_entry["result"]
+        assert pref_result["title"] == "A Framework for Creating Knowledge Graphs of Scientific Software Metadata"
+        assert pref_result["doi"] == "10.1162/qss_a_00167"
+        assert pref_result["journal"] == "Quantitative Science Studies"
+        # assert "version" not in pref_result # it is in the root in citation but not in the preferred (referencePublication)
+
+        versions = json_content.get(constants.CAT_VERSION, [])
+        cff_version_entry = next(
+            (v for v in versions if "CITATION.cff" in v.get("source", "")),
+            None
+        )
+
+        # 2. Validamos que la versión existe en su nueva ubicación
+        assert cff_version_entry is not None, "Version from CFF not found in global version field"
+        assert cff_version_entry["result"]["value"] == "0.1.0"
+
+        os.remove(test_data_path + "test_new_properties_citation_issue_935.json")
 
 
     @unittest.skipIf(os.getenv("CI") == "true", "Skipped in CI because it is already verified locally")
@@ -656,3 +729,449 @@ class TestJSONExport(unittest.TestCase):
         self.assertEqual(requirements[0].get("result", {}).get("version"), "3.20.3")
 
         os.remove(output_file)
+
+
+    def test_issue_886_bsd3(self):
+        """Checks whether copyright holder are correctly extracted from BSD 3-Clause license text"""
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "captum",
+                            doc_src=None,
+                            in_file=None,
+                            output=test_data_path + "test_issue_886_bsd3.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_886_bsd3.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+
+        copyright_entries = json_content[constants.CAT_COPYRIGHT]
+        copy = copyright_entries[0]["result"]
+        assert copy["value"] == "PyTorch team"
+        assert copy["year"] == "2019"
+        
+        os.remove(test_data_path + "test_issue_886_bsd3.json")
+
+
+    def test_issue_886_apache(self):
+        """Checks whether copyright holder are correctly extracted from Apache license text"""
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "Widoco",
+                            doc_src=None,
+                            in_file=None,
+                            output=test_data_path + "test_issue_886_apache.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_886_apache.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+        copyright_entries = json_content[constants.CAT_COPYRIGHT] 
+        copy = copyright_entries[0]["result"]
+        assert copy["value"] == "Daniel Garijo, Information Sciences Institute, USC."
+        assert copy["year"] == "2016"
+        os.remove(test_data_path + "test_issue_886_apache.json")
+
+
+    def test_issue_955_license_consolidation(self):
+        """Checks whether licenses are correctly consolidated and enriched with SPDX metadata"""
+        output_path = test_data_path + "test_issue_955_license_consolidation.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "Widoco",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+        
+        assert constants.CAT_LICENSE in json_content
+        license_entries = json_content[constants.CAT_LICENSE]
+        
+        assert len(license_entries) == 1
+        
+        license_res = license_entries[0]["result"]
+        
+        assert license_res["value"] == "Apache-2.0"
+        assert license_res["spdx_id"] == "Apache-2.0"
+        assert license_res["name"] == "Apache License 2.0"
+        assert license_res["url"] == "https://spdx.org/licenses/Apache-2.0"
+        assert license_res["identifier"] == "https://spdx.org/licenses/Apache-2.0"
+        
+        assert isinstance(license_entries[0]["technique"], list)
+        assert "file_exploration" in license_entries[0]["technique"]
+        assert "code_parser" in license_entries[0]["technique"]
+        
+        assert isinstance(license_entries[0]["source"], list)
+        assert len(license_entries[0]["source"]) >= 2
+
+        os.remove(output_path)
+
+    def test_issue_953_publication_reconciliation(self):
+        """Checks that citations are correctly extracted and reconciled from CFF and README."""
+
+        output_path = test_data_path + "test_issue_953_publication_reconciliation.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "somef_repo",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+        
+        citations = json_content[constants.CAT_CITATION]
+
+        assert constants.CAT_CITATION in json_content, "Missing citation field in JSON"
+        citations = json_content[constants.CAT_CITATION]
+        assert len(citations) == 3, f"Expected 3 citations, but found {len(citations)}"
+
+        software_cit = next((c for c in citations if c["result"]["type"] == "SoftwareApplication"), None)
+        # this is the root in the citation.cff. It is not the preferred
+        assert software_cit is not None, "SoftwareApplication citation not found"
+        assert software_cit["result"]["title"] == "SOMEF: Software metadata extraction framework"
+        assert len(software_cit["result"]["author"]) == 9 
+
+        # This is the preferred. It's a schoplarly article 
+        article_cit = next((c for c in citations if c["result"].get("doi") == "10.1162/qss_a_00167"), None)
+        assert article_cit is not None, "Preferred citation (ScholarlyArticle) not found"
+        assert article_cit["result"]["type"] == "ScholarlyArticle"
+        assert article_cit["result"]["journal"] == "Quantitative Science Studies"
+
+        bibtex_cit = next((c for c in citations if c["result"].get("doi") == "10.1109/BigData47090.2019.9006447"), None)
+        assert bibtex_cit is not None, "Bibtex citation (Text_excerpt) not found"
+        assert bibtex_cit["result"]["format"] == "bibtex"
+        assert bibtex_cit["result"]["year"] == "2019"
+
+        os.remove(output_path)
+
+
+    def test_issue_reconciliation_workloop(self):
+        """Checks that key metadata is correctly extracted and reconciled from codemeta.json and README. 
+        Issue with canolicalization ofvalues"""
+
+        output_path = test_data_path + "test_issue_reconciliation_workloopr.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "workloopr",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+        
+        assert constants.CAT_AUTHORS in json_content
+        authors = json_content[constants.CAT_AUTHORS]
+        assert len(authors) == 2
+        author_names = [a["result"]["value"] for a in authors]
+        assert "Vikram B. Baliga" in author_names
+        assert "Shreeram Senthivasan" in author_names
+
+        assert constants.CAT_INSTALLATION in json_content
+        installation = json_content[constants.CAT_INSTALLATION]
+        assert any("devtools::install_github" in i["result"]["value"] for i in installation)
+
+        assert constants.CAT_CITATION in json_content
+        citations = json_content[constants.CAT_CITATION]
+        # print(citations)
+        assert any("workloopR" in c["result"]["value"] for c in citations)
+
+        os.remove(output_path)
+        
+
+    
+    def test_issue_reconciliation_cropwater(self):
+        """Checks that key metadata is correctly extracted and reconciled from codemeta.json and README. 
+        Issue with canolicalization ofvalues"""
+
+        output_path = test_data_path + "test_issue_reconciliation_cropwater.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "cropwater",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+        
+        assert constants.CAT_AUTHORS in json_content
+        authors = json_content[constants.CAT_AUTHORS]
+        assert len(authors) == 5
+        author_names = [a["result"]["value"] for a in authors]
+        assert "Gabriel Constantino Blain" in author_names
+        assert "Adam H. Sparks" in author_names
+
+
+        assert constants.CAT_INSTALLATION in json_content
+        installation = json_content[constants.CAT_INSTALLATION]
+        assert any("gabrielblain/CropWaterBalance" in i["result"]["value"] for i in installation)
+
+        assert constants.CAT_LICENSE in json_content
+        licenses = json_content[constants.CAT_LICENSE]
+        spdx = next((l for l in licenses if l["result"].get("spdx_id") == "MIT"), None)
+        assert spdx is not None, "MIT license not found"
+
+        assert constants.CAT_DESCRIPTION in json_content
+
+        os.remove(output_path)
+
+
+    def test_issue_980_reconciliation_requirements(self):
+        """Checks that requirements with the same name and version are correctly reconciled
+        into a single entry merging sources, even when their raw values are not the same
+        (ej. 'pracma (>= 2.0.7)' vs 'pracma==>= 2.0.7')."""
+
+        output_path = test_data_path + "test_issue_980_reconciliation_requirements.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "ggstatsplot",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+
+        requirements = json_content[constants.CAT_REQUIREMENTS]
+        # print(requirements)
+
+        seen_keys = [(r["result"]["name"], r["result"].get("version", "")) for r in requirements]
+        unique_keys = set(seen_keys)
+
+        assert len(seen_keys) == len(unique_keys), (
+            f"Duplicate requirements found: "
+            f"{[k for k in unique_keys if seen_keys.count(k) > 1]}"
+        )
+
+        os.remove(output_path)
+
+    def test_issue_487_short_descriptions(self):
+        """Checks that descriptions with less than 5 words are filtered out from the output."""
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "sunpy_short_desc",
+                            doc_src=None,
+                            in_file=None,
+                            output=test_data_path + "test_issue_487_short_descriptions.json",
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        text_file = open(test_data_path + "test_issue_487_short_descriptions.json", "r")
+        data = text_file.read()
+        text_file.close()
+        json_content = json.loads(data)
+
+        descriptions = json_content[constants.CAT_DESCRIPTION]
+      
+        # assert all(len(d[constants.PROP_RESULT][constants.PROP_VALUE].split()) >= 5
+        #        for d in descriptions if isinstance(d[constants.PROP_RESULT][constants.PROP_VALUE], str)), \
+        # f"Found descriptions with less than 5 words: {descriptions}"
+        pyproject_descriptions = [d for d in descriptions if "pyproject.toml" in d.get("source", "")]
+        assert len(pyproject_descriptions) >= 1, f"Short description from pyproject.toml was incorrectly filtered: {descriptions}"
+
+        # descriptions from README should have >= 5 words. But rest of files can have short descriptions.
+        readme_descriptions = [d for d in descriptions if "readme" in d.get("source", "").lower()]
+        assert all(len(d[constants.PROP_RESULT][constants.PROP_VALUE].split()) >= 5
+                for d in readme_descriptions if isinstance(d[constants.PROP_RESULT][constants.PROP_VALUE], str)), \
+            f"Found short descriptions from README that should have been filtered: {readme_descriptions}"
+        
+        os.remove(test_data_path + "test_issue_487_short_descriptions.json")
+
+
+    def test_issue_770(self):
+        """ Test that ensures OS/platform information is extracted from headers"""
+
+        output_path = test_data_path + "test_issue_770.json"
+        somef_cli.run_cli(threshold=0.8,
+                          ignore_classifiers=False,
+                          repo_url=None,
+                          doc_src=test_data_path + "README-os-platforms.md",
+                          in_file=None,
+                          output=output_path,
+                          graph_out=None,
+                          graph_format="turtle",
+                          codemeta_out=None,
+                          pretty=True,
+                          missing=True,
+                          readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+            
+        platforms = json_content[constants.CAT_RUNTIME_PLATFORM]
+        values = [p[constants.PROP_RESULT][constants.PROP_VALUE] for p in platforms]
+        assert any("Windows" in v for v in values)
+        assert any("Linux" in v or "Ubuntu" in v for v in values)
+        assert any("macOS" in v for v in values)
+        assert any("Docker" in v for v in values)
+        assert any("Conda" in v for v in values)
+
+        os.remove(test_data_path + "test_issue_770.json")
+
+    def test_issue_634_header_license(self):
+        """
+        Checks that a license mentioned in a README header is resolved to SPDX and merged with other license entries into a single unified entry.
+        """
+
+        output_path = test_data_path + "test_issue_634_header_license.json"
+        
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=test_data_repositories + "mira",
+                            doc_src=None,
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+        
+        with open(output_path, "r") as text_file:
+            json_content = json.loads(text_file.read())
+
+        licenses = json_content[constants.CAT_LICENSE]
+        # print(licenses)
+        assert len(licenses) == 1, f"Expected just a merged license entry, found {len(licenses)}: {licenses}"
+
+        result = licenses[0][constants.PROP_RESULT]
+
+        assert result.get(constants.PROP_SPDX_ID) == "Apache-2.0", f"Expected spdx_id 'Apache-2.0', got: {result.get(constants.PROP_SPDX_ID)}"
+
+        techniques = licenses[0].get("technique", [])
+        assert "header_analysis" in techniques, f"Expected 'header_analysis' in techniques, got: {techniques}"
+
+        os.remove(output_path)
+
+    def test_issue_533_choosealicense_badge(self):
+        """
+        Checks that a license badge with a choosealicense.com URL is detected and resolved to SPDX.
+        """
+        output_path = test_data_path + "test_issue_533_choosealicense_badge.json"
+
+        somef_cli.run_cli(threshold=0.8,
+                            ignore_classifiers=False,
+                            repo_url=None,
+                            local_repo=None,
+                            doc_src=test_data_path + "README-manim.md",
+                            in_file=None,
+                            output=output_path,
+                            graph_out=None,
+                            graph_format="turtle",
+                            codemeta_out=None,
+                            pretty=True,
+                            missing=False,
+                            readme_only=False)
+
+        with open(output_path, "r") as f:
+            json_content = json.loads(f.read())
+
+        licenses = json_content.get(constants.CAT_LICENSE, [])
+
+        mit_license = next(
+            (l for l in licenses if l[constants.PROP_RESULT].get(constants.PROP_SPDX_ID) == "MIT"),
+            None
+        )
+        assert mit_license is not None, f"Expected a MIT license resolved from choosealicense.com badge, got: {licenses}"
+
+        techniques = mit_license.get("technique", [])
+        assert constants.TECHNIQUE_REGULAR_EXPRESSION in techniques, f"Expected 'regular_expressions' in techniques, got: {techniques}"
+        
+        os.remove(output_path)
+        
+    def test_issue_1050(self):
+        """citation.cff yaml parsing with unescaped quotes in abstract should not crash"""
+        somef_cli.run_cli(threshold=0.8,
+                        ignore_classifiers=False,
+                        repo_url=None,
+                        local_repo=test_data_repositories + "nemo",
+                        output=test_data_path + "test_issue_1050.json",
+                        pretty=True,
+                        readme_only=False)
+
+
+        with open(test_data_path + "test_issue_1050.json") as f:
+            json_content = json.load(f)
+
+        cff_entries = [
+            c for c in json_content.get(constants.CAT_CITATION, [])
+            if "CITATION.cff" in c.get("source", "")
+        ]
+        assert len(cff_entries) > 0, "CITATION.cff not found in citations"
+        
+        cff_entry = json_content[constants.CAT_CITATION][0]["result"]
+        assert cff_entry.get("title") == "NEMO: A Stellar Dynamics Toolbox"
+        assert cff_entry.get("type") == "SoftwareApplication"
+
+        cff_authors = cff_entry.get("author", [])
+        assert len(cff_authors) == 3
+        orcid_urls = [a.get("url") for a in cff_authors]
+        assert all(u and u.startswith("https://orcid.org/") for u in orcid_urls)
+
+        os.remove(test_data_path + "test_issue_1050.json")
+

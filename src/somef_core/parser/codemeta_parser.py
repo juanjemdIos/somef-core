@@ -63,9 +63,21 @@ def parse_license(license_data):
             spdx_id = identifier.split("spdx.org/licenses/")[-1].split("/")[0]
             license_info["spdx_id"] = spdx_id
     elif isinstance(license_data, str):
-        license_info["name"] = license_data
-        license_info["identifier"] = f"https://spdx.org/licenses/{license_data}"
-        license_info["spdx_id"] = license_data
+        # license_info["name"] = license_data
+        # license_info["identifier"] = f"https://spdx.org/licenses/{license_data}"
+        # license_info["spdx_id"] = license_data
+        license_str = license_data.strip()
+
+        if "spdx.org/licenses/" in license_str:
+            # Already a full SPDX URL
+            license_info["identifier"] = license_str
+            license_info["name"] = license_str.split("/")[-1]
+            license_info["spdx_id"] = license_info["name"]
+        else:
+            # we assume it's an spdx id like "MIT"
+            license_info["name"] = license_str
+            license_info["identifier"] = f"https://spdx.org/licenses/{license_str}"
+            license_info["spdx_id"] = license_str
     else:
         return None
     return license_info
@@ -234,6 +246,82 @@ def parse_programming_language(language_data):
 
     return None
 
+def parse_contributors(contributors_data):
+    """
+    Parse contributors from codemeta.json
+
+    Parameters
+    ----------
+    contributors_data: list, dict
+        Contributor data from codemeta.json
+
+    Returns
+    -------
+    list
+        List of contributor dictionaries
+    """
+    contributors_list = []
+
+    if isinstance(contributors_data, dict):
+        contributors_data = [contributors_data]
+
+    if not isinstance(contributors_data, list):
+        return contributors_list
+
+    for contributor in contributors_data:
+
+        if isinstance(contributor, dict):
+
+            given = contributor.get(constants.PROP_CODEMETA_GIVENAME)
+            family = contributor.get(constants.PROP_CODEMETA_FAMILYNAME)
+            name = contributor.get(constants.PROP_NAME)
+
+            if given and family:
+                full_name = f"{given} {family}"
+            elif name:
+                full_name = name
+            else:
+                continue
+
+            contributor_info = {
+                constants.PROP_VALUE: full_name,
+                constants.PROP_NAME: full_name,
+                constants.PROP_TYPE: constants.AGENT
+            }
+
+            if given:
+                contributor_info[constants.PROP_GIVEN_NAME] = given
+
+            if family:
+                contributor_info[constants.PROP_LAST_NAME] = family
+
+            if "email" in contributor:
+                contributor_info[constants.PROP_EMAIL] = contributor[constants.PROP_EMAIL]
+
+            affil = contributor.get(constants.PROP_AFFILIATION)
+            if affil:
+                if isinstance(affil, dict) and affil.get(constants.PROP_NAME):
+                    contributor_info[constants.PROP_AFFILIATION] = affil[constants.PROP_NAME]
+                elif isinstance(affil, str):
+                    contributor_info[constants.PROP_AFFILIATION] = affil
+
+            identifier = contributor.get(constants.PROP_IDENTIFIER) or contributor.get(constants.PROP_CODEMETA_ID)
+            if identifier:
+                contributor_info[constants.PROP_IDENTIFIER] = identifier
+
+            contributors_list.append(contributor_info)
+
+        elif isinstance(contributor, str):
+            name = contributor.strip()
+            if name:
+                contributors_list.append({
+                    constants.PROP_VALUE: name,
+                    constants.PROP_TYPE: constants.AGENT
+                })
+
+    return contributors_list
+
+
 def parse_codemeta_json_file(file_path, metadata_result: Result, source):
     """
 
@@ -289,6 +377,17 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                     constants.TECHNIQUE_CODE_CONFIG_PARSER,
                     source
                 )
+
+            if "contributor" in data:
+                contributors = parse_contributors(data["contributor"])
+                for contributor in contributors:
+                    metadata_result.add_result(
+                        constants.CAT_CONTRIBUTORS,
+                        contributor,
+                        1,
+                        constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                        source
+                    )
 
             if "issueTracker" in data:
                 metadata_result.add_result(
@@ -399,25 +498,9 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
 
                     for pub in ref_publications:
                         pub_data = parse_referenced_publication(pub)
-                        if pub_data:
-                     
-                            result_dict = {
-                                "value": pub_data.get("title", ""),
-                                "title": pub_data.get("title", ""),
-                                "type": constants.SCHOLARLY_ARTICLE
-                            }
-
-                            if pub_data.get("url"):
-                                result_dict["url"] = pub_data.get("url")
-
-                            if pub_data.get("date_published"):
-                                result_dict["date_published"] = pub_data.get("date_published")
-
-                            if pub_data.get("identifier"):
-                                result_dict["doi"] = pub_data.get("identifier")
-
+                        result_dict = map_reference_publication(pub_data)
+                        if result_dict:
                             metadata_result.add_result(
-                                # constants.CAT_REF_PUBLICATION,
                                 constants.CAT_CITATION,
                                 result_dict,
                                 1,
@@ -427,24 +510,9 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                 elif isinstance(ref_publications, dict):
                 
                     pub_data = parse_referenced_publication(ref_publications)
-                    if pub_data:
-                        result_dict = {
-                            "value": pub_data.get("title", ""),
-                            "title": pub_data.get("title", ""),
-                            "type": constants.SCHOLARLY_ARTICLE
-                        }
-
-                        if pub_data.get("url"):
-                            result_dict["url"] = pub_data.get("url")
-
-                        if pub_data.get("date_published"):
-                            result_dict["date_published"] = pub_data.get("date_published")
-
-                        if pub_data.get("identifier"):
-                            result_dict["doi"] = pub_data.get("identifier")
-
+                    result_dict = map_reference_publication(pub_data)
+                    if result_dict:
                         metadata_result.add_result(
-                            # constants.CAT_REF_PUBLICATION,
                             constants.CAT_CITATION,
                             result_dict,
                             1,
@@ -453,7 +521,6 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                         )
                 else:
                     metadata_result.add_result(
-                        # constants.CAT_REF_PUBLICATION,
                         constants.CAT_CITATION,
                         {
                             "value": data["referencePublication"],
@@ -464,37 +531,35 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                         source
                     )
 
-            if "funding" in data:
-                funding_data = data["funding"]
-                if isinstance(funding_data, list):
-                    for fund in funding_data:
-                        fund_info = parse_funding(fund)
-                        if fund_info:
-                            metadata_result.add_result(
-                                constants.CAT_FUNDING,
-                                {
-                                    "funder": fund_info.get("funder", ""),
-                                    "funding": fund_info.get("funding", ""),
-                                    "type": constants.STRING
-                                },
-                                1,
-                                constants.TECHNIQUE_CODE_CONFIG_PARSER,
-                                source
-                            )
-                elif isinstance(funding_data, dict):
-                    fund_info = parse_funding(funding_data)
-                    if fund_info:
-                        metadata_result.add_result(
-                            constants.CAT_FUNDING,
-                            {
-                                "funder": fund_info.get("funder", ""),
-                                "funding": fund_info.get("funding", ""),
-                                "type": constants.STRING
-                            },
-                            1,
-                            constants.TECHNIQUE_CODE_CONFIG_PARSER,
-                            source
-                        )
+
+            funder_data = data.get("funder")
+            funding_data = data.get("funding")
+
+            if funder_data or funding_data:
+                main_value = funding_data if funding_data else funder_data
+                
+                if isinstance(main_value, (list, dict)):
+                    main_value = str(main_value)
+
+                res_fund = {
+                    "value": main_value,
+                    "type": constants.STRING
+                }
+
+                if funder_data and (not isinstance(funder_data, list) or len(funder_data) > 0):
+                    res_fund[constants.PROP_FUNDER] = funder_data
+                
+                if funding_data and (not isinstance(funding_data, list) or len(funding_data) > 0):
+                    res_fund[constants.PROP_FUNDING] = funding_data
+
+                if res_fund.get("value"):
+                    metadata_result.add_result(
+                        constants.CAT_FUNDING,
+                        res_fund,
+                        1,
+                        constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                        source
+                    )
 
             if "developmentStatus" in data:
                 metadata_result.add_result(
@@ -570,7 +635,7 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                             if author_name:
                                 author_info = {
                                     "value": author_name,
-                                    "type": constants.STRING
+                                    "type": constants.AGENT
                                 }
 
                                 if "email" in author:
@@ -604,7 +669,7 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                     if author_name:
                         author_info = {
                             "value": author_name,
-                            "type": constants.STRING
+                            "type": constants.AGENT
                         }
 
                         if "email" in author:
@@ -625,10 +690,16 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                         )
 
             if "license" in data:
-                license_info = parse_license(data["license"])
+                license_raw = data["license"]
+                license_info = parse_license(license_raw)
                 if license_info:
+                    if isinstance(license_raw, str):
+                        val_lic = license_raw
+                    else:
+                        val_lic = license_info.get("name", "")
+
                     result_dict = {
-                        "value": license_info.get("name", ""),
+                        "value": val_lic,
                         "type": constants.LICENSE
                     }
 
@@ -658,7 +729,7 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                             # "version": requirement.get("version"),
                             **({"name": requirement["name"]} if "name" in requirement else {}),
                             **({"version": requirement["version"]} if "version" in requirement else {}),
-                            "type": constants.SOFTWARE_APPLICATION
+                            "type": constants.SOFTWARE_DEPENDENCY
                         },
                         1,
                         constants.TECHNIQUE_CODE_CONFIG_PARSER,
@@ -688,8 +759,100 @@ def parse_codemeta_json_file(file_path, metadata_result: Result, source):
                             source
                         )
 
+            if "runtimePlatform" in data:
+                runtime_platforms = data["runtimePlatform"]
+                if isinstance(runtime_platforms, str):
+                    runtime_platforms = [runtime_platforms]
+                if isinstance(runtime_platforms, list):
+                    for rp in runtime_platforms:
+                        if isinstance(rp, str):
+                            metadata_result.add_result(
+                                constants.CAT_RUNTIME_PLATFORM,
+                                {
+                                    "value": rp,
+                                    "type": constants.STRING
+                                },
+                                1,
+                                constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                                source
+                            )
+                            match = re.search(r'^([a-zA-Z0-9_\-\.]+)\s+version\s+([0-9][0-9a-zA-Z\.\-]*)', rp, re.IGNORECASE)
+                            if match:
+                                metadata_result.add_result(
+                                    constants.CAT_PROGRAMMING_LANGUAGES,
+                                    {
+                                        "name": match.group(1),
+                                        "value": match.group(1),
+                                        "version": match.group(2),
+                                        "type": constants.LANGUAGE
+                                    },
+                                    1,
+                                    constants.TECHNIQUE_CODE_CONFIG_PARSER,
+                                    source
+                                )
+
     except Exception as e:
         logging.error(f"Error parsing codemeta JSON file {file_path}: {str(e)}")
 
     return metadata_result
+
+def map_codemeta_author(author):
+    given = author.get("givenName")
+    family = author.get("familyName")
+    name = author.get("name")
+
+    if not name and (given or family):
+        name = f"{given or ''} {family or ''}".strip()
+
+    mapped = {
+        constants.PROP_TYPE: constants.AGENT,
+        constants.PROP_NAME: name,
+        constants.PROP_GIVEN_NAME: given,
+        constants.PROP_FAMILY_NAME: family
+    }
+
+    identifier = author.get("identifier") or author.get("@id")
+    if isinstance(identifier, str) and "orcid.org" in identifier:
+        mapped[constants.PROP_URL] = identifier
+
+    return {k: v for k, v in mapped.items() if v is not None}
+
+def map_reference_publication(pub_data):
+    if not pub_data:
+        return None
+
+    result = {
+        constants.PROP_VALUE: pub_data.get("title", ""),
+        constants.PROP_TITLE: pub_data.get("title", ""),
+        constants.PROP_TYPE: constants.SCHOLARLY_ARTICLE
+    }
+
+    if pub_data.get("url"):
+        result[constants.PROP_URL] = pub_data.get("url")
+
+    if pub_data.get("date_published"):
+        result[constants.PROP_DATE_PUBLISHED] = pub_data.get("date_published")
+
+    if pub_data.get("identifier"):
+        result[constants.PROP_DOI] = pub_data.get("identifier")
+
+    authors_raw = pub_data.get("author")
+
+    if authors_raw:
+        if isinstance(authors_raw, dict):
+            authors_iter = [authors_raw]
+        elif isinstance(authors_raw, list):
+            authors_iter = authors_raw
+        else:
+            authors_iter = []
+
+        mapped_authors = [
+            map_codemeta_author(a)
+            for a in authors_iter
+            if isinstance(a, dict)
+        ]
+
+        result[constants.CAT_AUTHORS] = mapped_authors
+
+    return result
 
