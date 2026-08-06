@@ -94,13 +94,14 @@ REGEXP_CHOOSE_LICENSE = r'choosealicense\.com/licenses/([^/\s]+)'
 # REGEXP_LTD_INC = r'\b(inc|ltd|llc|corporation)([.,]|\b)'
 REGEXP_LTD_INC = r'\b(inc|ltd|llc|corporation|foundation|community|project|team|group|society|institute|association|consortium|organization|organisation)([.,]|\b)'
 
-# Detect duplicate all kind of dois. 
+# Detect duplicate all kind of dois. te
 REGEXP_ALL_DOIS = r'10\.\d{4,9}/[-._;()/:A-Z0-9]+'
 
 # Detect zenodo latest doi in readme. 
 ZENODO_API_BASE = "https://zenodo.org/api"
 REGEXP_ZENODO_LATEST_DOI = r':target:\s*(https://zenodo\.org/badge/latestdoi/\d+)'
-REGEXP_ZENODO_DOI = r'https://zenodo\.org/badge/DOI/\d+'
+# REGEXP_ZENODO_DOI = r'https://zenodo\.org/badge/DOI/\d+'
+REGEXP_ZENODO_DOI = r'https://zenodo\.org/badge/DOI/(10\.\d{4,9}/zenodo\.\d+)'
 REGEXP_ZENODO_JSON_LD = r"<script[^>]*type=['\"]application/ld\+json['\"][^>]*>(.*?)</script>"
 
 # Detect copyright information in license files. 
