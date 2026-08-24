@@ -1,15 +1,16 @@
 import os
 from pathlib import Path
 import nbformat
+import logging
+import tomllib
+import configparser
+import re
 from nbformat.reader import NotJSONError
 from chardet import detect
-import re
+
 from .extract_workflows import is_file_workflow
 from .process_results import Result
 from .utils import constants
-# from .extract_ontologies import is_file_ontology
-
-import pdb
 
 
 def check_repository_type(path_repo, title, metadata_result: Result):
@@ -17,23 +18,15 @@ def check_repository_type(path_repo, title, metadata_result: Result):
         output depending on the software type or if the repository is not considered software"""
 
     if check_static_websites(path_repo, metadata_result):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'static-website',
                                        constants.PROP_TYPE: constants.STRING
                                    },
                                    1,
                                    constants.TECHNIQUE_HEURISTICS)
-    # elif check_ontologies(path_repo):
-    #     metadata_result.add_result(constants.CAT_TYPE,
-    #                                {
-    #                                    constants.PROP_VALUE: 'ontology',
-    #                                    constants.PROP_TYPE: constants.STRING
-    #                                },
-    #                                1,
-    #                                constants.TECHNIQUE_HEURISTICS)
     elif check_notebooks(path_repo):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'notebook-application',
                                        constants.PROP_TYPE: constants.STRING
@@ -49,25 +42,48 @@ def check_repository_type(path_repo, title, metadata_result: Result):
     #                                },
     #                                1,
     #                                constants.TECHNIQUE_HEURISTICS)
-    elif check_command_line(path_repo):
+    elif check_command_line(path_repo) or check_command_line_from_package(path_repo):
         """The 0.82 confidence result is from running the analysis on 300 repos and showing the precision 
             of the heuristic"""
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'commandline-application',
                                        constants.PROP_TYPE: constants.STRING
                                    },
                                    0.82,
                                    constants.TECHNIQUE_HEURISTICS)
-
+    elif check_service(path_repo):
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
+                                   {
+                                       constants.PROP_VALUE: 'service',
+                                       constants.PROP_TYPE: constants.STRING
+                                   },
+                                   1,
+                                   constants.TECHNIQUE_HEURISTICS)
+    elif check_package_library(path_repo):
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
+                                   {
+                                       constants.PROP_VALUE: 'library',
+                                       constants.PROP_TYPE: constants.STRING
+                                   },
+                                   1,
+                                   constants.TECHNIQUE_HEURISTICS)
     elif check_extras(path_repo):
-        metadata_result.add_result(constants.CAT_TYPE,
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
                                    {
                                        constants.PROP_VALUE: 'non-software',
                                        constants.PROP_TYPE: constants.STRING
                                    },
                                    1,
                                    constants.TECHNIQUE_HEURISTICS)
+    else:
+        metadata_result.add_result(constants.CAT_APPLICATION_TYPE,
+                                    {
+                                        constants.PROP_VALUE: 'software',
+                                        constants.PROP_TYPE: constants.STRING
+                                    },
+                                    1,
+                            constants.TECHNIQUE_HEURISTICS)
     return metadata_result
 
 
@@ -100,23 +116,6 @@ def check_notebooks(path_repo):
     if code_notebooks > 1:
         return not bad_extensions
     return False
-
-
-# def check_ontologies(path_repo):
-#     """Function which detects if repository is an Ontology based on files present
-#        and the non-existence of code files"""
-#     ontology = False
-#     for root, dirs, files in os.walk(path_repo):
-#         repo_relative_path = os.path.relpath(root, path_repo)
-#         for file in files:
-#             file_path = os.path.join(repo_relative_path, file)
-#             # print(os.path.join(repo_relative_path,file_path))
-#             if file.endswith(constants.code_extensions):
-#                 return False
-#             elif file.endswith(constants.ontology_extensions):
-#                 if not ontology:
-#                     ontology = is_file_ontology(os.path.join(path_repo, file_path))
-#     return ontology
 
 
 def check_command_line(path_repo):
@@ -166,6 +165,42 @@ def check_extras(path_repo):
                     return False
     return True
 
+def check_package_library(path_repo):
+    """Function which detects if a repository contains a package
+       definition file (i.e., it is packaged software)"""
+    package_files = (
+        "pyproject.toml", "setup.py", "setup.cfg", "package.json",
+        "Cargo.toml", "DESCRIPTION", "pom.xml", "build.gradle",
+        "Gemfile", "go.mod", "composer.json"
+    )
+    for root, dirs, files in os.walk(path_repo):
+        for file in files:
+            if file in package_files:
+                return True
+    return False
+
+
+def check_service(path_repo):
+    """Function which detects if a repository is a Service (web service/API)
+       based on the presence of deployment files (Docker) or web frameworks
+       in dependency files."""
+    web_frameworks = ("flask", "fastapi", "django", "connexion", "uvicorn", "gunicorn", "tornado", "aiohttp", "cherrypy")
+    deployment_files = ("Dockerfile", "docker-compose.yml", "docker-compose.yaml", "docker-compose.yml")
+    for root, dirs, files in os.walk(path_repo):
+        for file in files:
+            file_path = os.path.join(root, file)
+            if file in deployment_files:
+                return True
+            if file.lower() in ("pyproject.toml", "requirements.txt", "environment.yml", "setup.cfg"):
+                try:
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read().lower()
+                    if any(fw in content for fw in web_frameworks):
+                        return True
+                except Exception as e:
+                    logging.error(f"Error reading {file_path}: {e}")
+    return False
+
 
 def check_static_websites(path_repo, repo_metadata: Result):
     """Function that analyzes byte size of js,css,html languages and checks if 
@@ -199,27 +234,72 @@ def check_static_websites(path_repo, repo_metadata: Result):
                 if has_code_in_rmd(file_path):
                     return False
     try:
-        languages = repo_metadata[constants.CAT_PROGRAMMING_LANGUAGES]
-        print(languages)
+        languages = repo_metadata.results[constants.CAT_PROGRAMMING_LANGUAGES]
         for language in languages:
             language_name = language[constants.PROP_RESULT][constants.PROP_NAME]
-            print(language_name)
             if language_name.lower() == "javascript":
                 js_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
-                print(js_size)
             elif language_name.lower() == "scss" or language_name.lower() == "css":
                 css_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
             total_size += language[constants.PROP_RESULT][constants.PROP_SIZE]
     except Exception as e:
-        print(e)
+        logging.warning(f"Could not retrieve programming languages for static website check: {e}")
+    # if html_file > 0:
+    #     if js_size > 0 and css_size == 0:
+    #         if js_size / total_size < 0.91:
+    #             return True
+    #     elif js_size == 0 and css_size > 0:
+    #         if css_size / total_size < 0.798:
+    #             return True
+    #     return True
     if html_file > 0:
         if js_size > 0 and css_size == 0:
-            if js_size / total_size < 0.91:
-                return True
+            return js_size / total_size < 0.91
         elif js_size == 0 and css_size > 0:
-            if css_size / total_size < 0.798:
-                return True
+            return css_size / total_size < 0.798
         return True
+
+    return False
+
+
+def check_command_line_from_package(path_repo):
+    """Function which detects if a repository is a Commandline Application
+       based on entry points / scripts in package definition files
+       (pyproject.toml `[project.scripts]`, `[tool.poetry.scripts]`,
+        Cargo.toml `[[bin]]`, setup.cfg `console_scripts`)."""
+
+    for root, dirs, files in os.walk(path_repo):
+        for file in files:
+            file_path = os.path.join(root, file)
+
+            if file == "pyproject.toml":
+                try:
+                    with open(file_path, "rb") as f:
+                        data = tomllib.load(f)
+                    project_scripts = data.get("project", {}).get("scripts", {})
+                    poetry_scripts = data.get("tool", {}).get("poetry", {}).get("scripts", {})
+                    if project_scripts or poetry_scripts:
+                        return True
+                except Exception as e:
+                    logging.error(f"Error parsing {file_path}: {e}")
+
+            elif file == "Cargo.toml":
+                try:
+                    with open(file_path, "rb") as f:
+                        data = tomllib.load(f)
+                    if "bin" in data:
+                        return True
+                except Exception as e:
+                    logging.error(f"Error parsing {file_path}: {e}")
+
+            elif file == "setup.cfg":
+                try:
+                    config = configparser.ConfigParser()
+                    config.read(file_path, encoding="utf-8")
+                    if config.has_section("options.entry_points"):
+                        return True
+                except Exception as e:
+                    logging.error(f"Error parsing {file_path}: {e}")
 
     return False
 

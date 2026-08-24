@@ -5,6 +5,7 @@ import time
 import requests
 import sys
 import re
+import base64
 from datetime import datetime
 from urllib.parse import urlparse, quote
 from .utils import constants
@@ -21,9 +22,9 @@ def header_template(authorization=None):
     header = {}
     file_paths = configuration.get_configuration_file()
     if authorization is not None:
-        header[constants.CONF_AUTHORIZATION] = authorization
-    elif constants.CONF_AUTHORIZATION in file_paths.keys():
-        header[constants.CONF_AUTHORIZATION] = file_paths[constants.CONF_AUTHORIZATION]
+        header[constants.PROP_AUTHORIZATION] = authorization          
+    elif constants.CONF_GITHUB_AUTHORIZATION in file_paths:
+        header[constants.PROP_AUTHORIZATION] = file_paths[constants.CONF_GITHUB_AUTHORIZATION]   
     return header
 
 
@@ -38,23 +39,43 @@ def is_gitlab(gitlab_server):
     return False
 
 # the same as requests.get(args).json(), but protects against rate limiting
-def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=constants.SIZE_DOWNLOAD_LIMIT_MB, **kwargs):
+def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=None, **kwargs):
 # def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, **kwargs):
-    """Function to obtain how many requests we have pending with the GitHub API"""
+    """Function to obtain how many requests we have pending with the repository API"""
 
     """GET request that handles rate limiting and prevents downloading excessively large files"""
+
+    if size_limit_mb is None:
+        try:
+            config = configuration.get_configuration_file()
+            size_limit_mb = config.get(constants.CONF_DOWNLOAD_LIMIT_MB, constants.SIZE_DOWNLOAD_LIMIT_MB)
+        except Exception:
+            size_limit_mb = constants.SIZE_DOWNLOAD_LIMIT_MB
+
     size_limit_bytes = size_limit_mb * 1024 * 1024
     url = args[0] if args else kwargs.get("url")
     if not url:
         raise ValueError("Missing URL in rate_limit_get")
     
     parsed = urlparse(url)
-    is_api_request = "api.github.com" in parsed.netloc
+    # is_api_request = "api.github.com" in parsed.netloc
+    is_api_request = any([
+        "api.github.com" in parsed.netloc,
+        "/api/v1" in parsed.path,
+        "api.bitbucket.org" in parsed.netloc,
+        "/api/v4" in parsed.path,
+    ])
     content_length = None
-    # just verify size if NOT is a request to api.github.com
+    # Check file size before downloading the full body (skip for GitHub API requests,
+    # which are always small JSON payloads).
     if not is_api_request:
         try:
-            head_response = requests.get(url, stream=True, allow_redirects=True, **kwargs)
+            # head_response = requests.get(url, stream=True, allow_redirects=True, **kwargs)
+            # Use a proper HEAD request to read only the response headers.
+         
+            head_response = requests.head(url, allow_redirects=True,
+                                           timeout=constants.DOWNLOAD_TIMEOUT_SECONDS, **kwargs)
+            head_response.close()  # release the connection back to the pool immediately
             content_length = head_response.headers.get("Content-Length")
             if content_length is not None:
                 size_bytes = int(content_length)
@@ -79,27 +100,38 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=const
             stream=use_stream,
             **kwargs
         )
-        # Detect invalid or insufficient GitHub token 
+        # Detect invalid or insufficient token 
         if response.status_code == 401: 
-            raise Exception("Invalid GitHub token. Run `somef configure` to set a valid token.") 
+            raise Exception("Invalid token. Run `somef configure` to set a valid token.") 
         if response.status_code == 403: 
-            raise Exception("GitHub token lacks required permissions or scopes.")
+            raise Exception("Token lacks required permissions or scopes.")
         
         date = response.headers.get("Date", "")
         # Show rate limit information if available
-        if "X-RateLimit-Remaining" in response.headers:
-            rate_limit_remaining = response.headers["X-RateLimit-Remaining"]
-            epochtime = int(response.headers["X-RateLimit-Reset"])
+        rate_limit_remaining = response.headers.get("X-RateLimit-Remaining") or response.headers.get("RateLimit-Remaining")
+        rate_limit_reset = response.headers.get("X-RateLimit-Reset") or response.headers.get("RateLimit-Reset")
+
+        # if "X-RateLimit-Remaining" in response.headers:
+        #     rate_limit_remaining = response.headers["X-RateLimit-Remaining"]
+        if rate_limit_remaining is not None and rate_limit_reset is not None:
+            # epochtime = int(response.headers["X-RateLimit-Reset"])
+            epochtime = int(rate_limit_reset)
+
+            if epochtime < 1000000000:
+                epochtime = int(time.time()) + epochtime
+
             date_reset = datetime.fromtimestamp(epochtime)
+
             logging.info(
-                "Remaining GitHub API requests: " + rate_limit_remaining + " ### Next rate limit reset at: " + str(
+                "Remaining repository API requests: " + rate_limit_remaining + " ### Next rate limit reset at: " + str(
                     date_reset))
             
             if not use_stream:
                 try:
                     json_data = response.json()
                     msg = json_data.get("message", "")
-                    if "API rate limit exceeded" in msg:
+                    # if "API rate limit exceeded" in msg:
+                    if "rate limit" in msg.lower():
                         rate_limited = True
                         logging.warning(f"Rate limited. Backing off for {initial_backoff} seconds")
                         time.sleep(initial_backoff)
@@ -126,12 +158,10 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=const
                 content.extend(chunk)
                 total_read += len(chunk)
 
-                # Comprobar límite de tamaño
                 if total_read > size_limit_bytes:
                     logging.warning(f"Downloaded content exceeded {size_limit_bytes} bytes. Aborting.")
                     return None, None
 
-                # Comprobar límite de tiempo
                 elapsed = time.monotonic() - start_time
                 if elapsed > constants.DOWNLOAD_TIMEOUT_SECONDS:
                     logging.warning(f"Download exceeded time limit ({elapsed:.2f}s). Aborting.")
@@ -146,7 +176,7 @@ def rate_limit_get(*args, backoff_rate=2, initial_backoff=1, size_limit_mb=const
     return response, date
 
 
-def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
+def load_gitlab_repository_metadata(repo_metadata: Result, repository_url, authorization=None, ignore_api_metadata=False, commit=None):
     """
     Function uses the repository_url provided to load required information from gitlab.
     Information kept from the repository is written in keep_keys.
@@ -154,6 +184,7 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
     ----------
     @param repo_metadata: Result object with the metadata found in the repository so far
     @param repository_url: URL of the Gitlab repository to analyze
+    @param authorization: Authorization token for GitLab API access
 
     Returns
     -------
@@ -209,25 +240,25 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
 
     # could be gitlab.com or some gitlab self-hosted GitLab servers like gitlab.in2p3.fr
     if repository_url.rfind("gitlab.com") > 0:
-        project_id = get_project_id(repository_url, False)
+        project_id = get_project_id(repository_url, False, authorization)
         project_api_url = f"https://gitlab.com/api/v4/projects/{project_id}"
     else:
         project_path = url.path.lstrip("/")  # "gammalearn/gammalearn"
         encoded_project_path = quote(project_path, safe="") # Codifica "/" como "%2F"
         # Build url of api to get id
         api_url = f"https://{url.netloc}/api/v4/projects/{encoded_project_path}"
-        project_id = get_project_id(api_url, True)
+        project_id = get_project_id(api_url, True, authorization,use_config=False)
         logging.info(f'Project_id: {project_id}')
         project_api_url = f"https://{url.netloc}/api/v4/projects/{project_id}"
     
     logging.info(f"Downloading {project_api_url}")
-    details = requests.get(project_api_url)
+    details, date = rate_limit_get(project_api_url, headers=gitlab_header_template(authorization, use_config=False))
     project_details = details.json()
-    date = details.headers["date"]
+    # date = details.headers["date"]
 
     repo_api_base_url = f"{repository_url}"
     # releases = get_gitlab_releases(project_id, f"https://{url.netloc}")
-    all_releases = get_all_gitlab_releases(project_api_url)
+    all_releases = get_all_gitlab_releases(project_api_url, authorization)
     release_list_filtered = [do_crosswalk(release, constants.release_gitlab_crosswalk_table) for release in all_releases]
 
     for release in release_list_filtered:
@@ -301,6 +332,8 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
 
     if default_branch is None:
         default_branch = general_resp['defaultBranch']
+    if commit: 
+        default_branch = commit
 
     project_path = "/".join(path_components)
 
@@ -324,10 +357,11 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
             license_result[constants.PROP_NAME] = general_resp["license"]["name"]
         if "url" in general_resp['license']:
             license_result[constants.PROP_VALUE] = general_resp["license"]["url"]
-
-        # for k in ('name', 'url'):
-        #     if k in general_resp['license']:
-        #         license_info[k] = general_resp['license'][k]
+            temp_info_lic = detect_license_spdx(general_resp["license"]["name"], 'JSON')
+            if temp_info_lic:
+                license_result[constants.PROP_SPDX_ID] = temp_info_lic['spdx_id']
+                license_result[constants.PROP_URL] = temp_info_lic['url']
+                license_result[constants.PROP_IDENTIFIER] = temp_info_lic['identifier']
 
     # If we didn't find it, look for the license
     if constants.PROP_VALUE not in license_result or license_result[constants.PROP_VALUE] is None:
@@ -341,6 +375,7 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
             if license_info:
                  license_result[constants.PROP_NAME] = license_info['name']
                  license_result[constants.PROP_SPDX_ID] = license_info['spdx_id']
+                 license_result[constants.PROP_IDENTIFIER] = license_info['identifier']
 
     if constants.PROP_VALUE in license_result:
         repo_metadata.add_result(constants.CAT_LICENSE, license_result, 1, constants.TECHNIQUE_GITLAB_API)
@@ -364,6 +399,57 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
             constants.PROP_TYPE: constants.STRING
         }
         repo_metadata.add_result(constants.CAT_KEYWORDS, result, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract name
+    if project_details.get('name'):
+        repo_metadata.add_result(constants.CAT_NAME, {
+            constants.PROP_VALUE: project_details['name'],
+            constants.PROP_TYPE: constants.STRING
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract full_name
+    if project_details.get('path_with_namespace'):
+        repo_metadata.add_result(constants.CAT_FULL_NAME, {
+            constants.PROP_VALUE: project_details['path_with_namespace'],
+            constants.PROP_TYPE: constants.STRING
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract description
+    if project_details.get('description'):
+        repo_metadata.add_result(constants.CAT_DESCRIPTION, {
+            constants.PROP_VALUE: project_details['description'],
+            constants.PROP_TYPE: constants.STRING
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract owner
+    if project_details.get('owner') and project_details['owner'].get('username'):
+        owner_type = "Person"
+        if project_details.get('namespace') and project_details['namespace'].get('kind'):
+            owner_type = "Organization" if project_details['namespace']['kind'] == 'group' else "Person"
+        repo_metadata.add_result(constants.CAT_OWNER, {
+            constants.PROP_VALUE: project_details['owner']['username'],
+            constants.PROP_TYPE: owner_type
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract date_created
+    if project_details.get('created_at'):
+        repo_metadata.add_result(constants.CAT_DATE_CREATED, {
+            constants.PROP_VALUE: project_details['created_at'],
+            constants.PROP_TYPE: constants.DATE
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract date_updated
+    if project_details.get('last_activity_at'):
+        repo_metadata.add_result(constants.CAT_DATE_UPDATED, {
+            constants.PROP_VALUE: project_details['last_activity_at'],
+            constants.PROP_TYPE: constants.DATE
+        }, 1, constants.TECHNIQUE_GITLAB_API)
+
+    # extract issue_tracker
+    repo_metadata.add_result(constants.CAT_ISSUE_TRACKER, {
+        constants.PROP_VALUE: f"https://{url.netloc}/{project_path}/-/issues",
+        constants.PROP_TYPE: constants.URL
+    }, 1, constants.TECHNIQUE_GITLAB_API)
 
     # get social features: stargazers_count
     if project_details['star_count'] is not None:
@@ -397,15 +483,20 @@ def load_gitlab_repository_metadata(repo_metadata: Result, repository_url):
             constants.PROP_TYPE: constants.URL
         }, 1, constants.TECHNIQUE_GITLAB_API)
 
+    if not ignore_api_metadata and commit:
+        repo_metadata = fetch_commit_metadata(
+            repo_metadata, constants.RepositoryType.GITLAB, commit,
+            headers=gitlab_header_template(authorization), project_api_url=project_api_url
+        )
     logging.info("Repository information successfully loaded. \n")
     # return repo_metadata, owner, repo_name, default_branch
     return repo_metadata, owner, repo_name, default_branch, project_path
 
 
 
-def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
+def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref, authorization=None, download_limit=None):
     """
-    Download all repository files from a GitHub repository
+    Download all repository files from a GitLab repository
     Parameters
     ----------
     @param repo_branch: Branch of the repo we are analysing
@@ -413,6 +504,7 @@ def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
     @param repo_name: name of the repo
     @param owner: owner of the GitLab repo
     @param directory: directory where to extract all downloaded files
+    @param authorization: Authorization token for GitLab API access
     Returns
     -------
     @rtype: string
@@ -432,7 +524,10 @@ def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
     )
 
     logging.info(f"Downloading {repo_archive_url}")
-    repo_download = requests.get(repo_archive_url)
+    repo_download, _ = rate_limit_get(repo_archive_url, headers=gitlab_header_template(authorization), size_limit_mb=download_limit)
+    if repo_download is None:
+        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB")
+        return None
     repo_zip = repo_download.content
 
     repo_zip_file = os.path.join(directory, "repo.zip")
@@ -454,7 +549,7 @@ def download_gitlab_files(directory, owner, repo_name, repo_branch, repo_ref):
 
 
 def download_readme(owner, repo_name, default_branch, repo_type, authorization, project_path = None):
-    """ss
+    """
     Method that given a repository owner, name and default branch, it downloads the readme content only.
     The readme is assumed to be README.md
     Parameters
@@ -475,12 +570,28 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization, 
     elif repo_type is constants.RepositoryType.GITHUB:
         primary_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/{default_branch}/README.md"
         secondary_url = f"https://raw.githubusercontent.com/{owner}/{repo_name}/master/README.md"
+    elif repo_type is constants.RepositoryType.CODEBERG:
+        primary_url = f"https://codeberg.org/{owner}/{repo_name}/raw/branch/{default_branch}/README.md"
+        secondary_url = f"https://codeberg.org/{owner}/{repo_name}/raw/branch/master/README.md"
+    elif repo_type is constants.RepositoryType.BITBUCKET:
+        primary_url = f"https://bitbucket.org/{owner}/{repo_name}/raw/{default_branch}/README.md"
+        secondary_url = f"https://bitbucket.org/{owner}/{repo_name}/raw/master/README.md"
     else:
         logging.error("Repository type not supported")
         return None
     logging.info(f"Downloading {primary_url}")
 
-    repo_download, date = rate_limit_get(primary_url, headers=header_template(authorization))
+
+    if repo_type is constants.RepositoryType.GITLAB:
+        headers = gitlab_header_template(authorization)
+    elif repo_type is constants.RepositoryType.CODEBERG:
+        headers = codeberg_header_template(authorization)
+    elif repo_type is constants.RepositoryType.BITBUCKET:
+        headers = bitbucket_header_template(authorization)
+    else:
+        headers = header_template(authorization)
+
+    repo_download, date = rate_limit_get(primary_url, headers=headers)
 
     if repo_download is None:
         logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
@@ -488,7 +599,8 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization, 
     if repo_download.status_code == 404:
         logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
         logging.info(f"Trying to download {secondary_url}")
-        repo_download, date = rate_limit_get(secondary_url, headers=header_template(authorization))
+        # repo_download, date = rate_limit_get(secondary_url, headers=header_template(authorization))
+        repo_download, date = rate_limit_get(secondary_url, headers=headers)
         if repo_download is None:
             logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
             return None      
@@ -502,7 +614,7 @@ def download_readme(owner, repo_name, default_branch, repo_type, authorization, 
 
 def load_online_repository_metadata(repository_metadata: Result, repository_url, ignore_api_metadata=False,
                                     repo_type=constants.RepositoryType.GITHUB, authorization=None, reconcile_authors=False,
-                                    branch=None,tag=None):
+                                    branch=None,tag=None, commit=None):
     """
     Function uses the repository_url provided to load required information from GitHub or Gitlab.
     Information kept from the repository is written in keep_keys.
@@ -516,13 +628,18 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
     @param reconcile_authors: flag to indicate if additional should be extracted from certain files as codeowners. More request.
     @param branch: branch of the repository to analyze. Overrides the default branch detected from the repository metadata.
     @param tag: tag of the repository to analyze. Cannot be used together with the branch parameter.
+    @param commit: commit of the repository to analyze. Cannot be used together with the branch or tag parameter.
 
     Returns
     -------
     @return: Result object with the available metadata from online APIs plus its owner, repo name and default branch
     """
     if repo_type == constants.RepositoryType.GITLAB:
-        return load_gitlab_repository_metadata(repository_metadata, repository_url)
+        return load_gitlab_repository_metadata(repository_metadata, repository_url, authorization, commit=commit)
+    elif repo_type == constants.RepositoryType.CODEBERG:
+        return load_codeberg_repository_metadata(repository_metadata, repository_url, authorization, commit=commit)
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        return load_bitbucket_repository_metadata(repository_metadata, repository_url, authorization, commit=commit)
     elif repo_type == constants.RepositoryType.LOCAL:
         logging.warning("Trying to download metadata from a local repository")
         return None
@@ -540,13 +657,13 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
 
     if url.netloc != constants.GITHUB_DOMAIN:
         logging.error("Repository must be from Github")
-        return repository_metadata, "", "", ""
+        return repository_metadata, "", "", "", ""
 
     path_components = url.path.split('/')
 
     if len(path_components) < 3:
         logging.error("Repository link is not correct. \nThe correct format is https://github.com/{owner}/{repo_name}.")
-        return repository_metadata, "", "", ""
+        return repository_metadata, "", "", "", ""
 
     owner = path_components[1]
     repo_name = path_components[2]
@@ -559,7 +676,7 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
             logging.error(f"Github link is not correct. \n"
                 f"The correct format is https://github.com/{owner}/{repo_name}/tree/... \n"
                 f"or  https://github.com/{owner}/{repo_name}/blob/....")
-            return repository_metadata, "", "", ""
+            return repository_metadata, "", "", "", ""
 
         # we must join all after 4, as sometimes tags have "/" in them.
         # default_branch = "/".join(path_components[4:])
@@ -572,7 +689,7 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
         general_resp_raw, date = rate_limit_get(repo_api_base_url, headers=header)
         if general_resp_raw is None:
             logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or content-lenght none")
-            return repository_metadata, "", "", ""
+            return repository_metadata, "", "", "", ""
         
         general_resp = general_resp_raw.json()
  
@@ -594,7 +711,8 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
         default_branch = branch
     if tag:
         default_branch = tag
-
+    if commit:
+        default_branch = commit
     # filter the general response with only the fields we are interested in, mapping them to our keys
     filtered_resp = {}
     if not ignore_api_metadata:
@@ -640,7 +758,11 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
                     constants.PROP_URL: value["url"]
                 }
                 if "spdx_id" in value.keys():
-                    result[constants.PROP_SPDX_ID] = value["spdx_id"]
+                    spdx_id = value["spdx_id"]
+                    spdx_url = f"https://spdx.org/licenses/{spdx_id}"
+                    result[constants.PROP_SPDX_ID] = spdx_id
+                    result[constants.PROP_URL] = spdx_url
+                    result[constants.PROP_IDENTIFIER] = spdx_url
             elif category == constants.CAT_OWNER:
                 result = {
                     constants.PROP_VALUE: value,
@@ -731,6 +853,12 @@ def load_online_repository_metadata(repository_metadata: Result, repository_url,
 
             repository_metadata.add_result(constants.CAT_RELEASES, release_obj, 1,
                                             constants.TECHNIQUE_GITHUB_API)
+
+    if not ignore_api_metadata and commit:
+        repository_metadata = fetch_commit_metadata(
+            repository_metadata, constants.RepositoryType.GITHUB, commit, header,
+            repo_api_base_url=repo_api_base_url
+        )   
     logging.info("Repository information successfully loaded.\n")
     return repository_metadata, owner, repo_name, default_branch, None
 
@@ -756,12 +884,12 @@ def do_crosswalk(data, crosswalk_table):
         if value is not None:
             output[somef_key] = value
         else:
-            logging.error(f"Error: key {path} not present in github repository")
+            logging.debug(f"Error: key {path} not present in repository")
     return output
 
 
 def download_repository_files(owner, repo_name, default_branch, repo_type, target_dir, repo_ref=None,
-                              authorization=None):
+                              authorization=None, download_limit=None):
     """
     Given a repository, this method will download its files and return the readme text
     Parameters
@@ -781,20 +909,42 @@ def download_repository_files(owner, repo_name, default_branch, repo_type, targe
     """
 
     if repo_type == constants.RepositoryType.GITHUB:
-        return download_github_files(target_dir, owner, repo_name, default_branch, authorization)
+        return download_github_files(target_dir, owner, repo_name, default_branch, authorization, download_limit)
     elif repo_type == constants.RepositoryType.GITLAB:
-        return download_gitlab_files(target_dir, owner, repo_name, default_branch, repo_ref)
+        return download_gitlab_files(target_dir, owner, repo_name, default_branch, repo_ref, authorization,download_limit)
+    elif repo_type == constants.RepositoryType.CODEBERG:
+        return download_codeberg_files(target_dir, owner, repo_name, default_branch, authorization, download_limit)
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        return download_bitbucket_files(target_dir, owner, repo_name, default_branch, authorization, download_limit)
     else:
         logging.error("Cannot download files from a local repository!")
         return None
 
 
-def download_github_files(directory, owner, repo_name, repo_ref, authorization):
+def download_github_files(directory, owner, repo_name, repo_ref, authorization, download_limit=None):
     """
-    Download all repository files from a GitHub repository
+    Download all repository files from a GitHub repository.
+
+    GitHub's short-form archive URL ``/archive/{ref}.zip`` returns HTTP 300 (Multiple
+    Choices) when the ref name is **ambiguous** — i.e. a branch and a tag share the
+    same name (e.g. a repo whose default branch is ``v2.0`` and also has a tag called
+    ``v2.0``).  In that case we must use the fully-qualified ref URLs:
+      - ``/archive/refs/heads/{ref}.zip``  (explicit branch)
+      - ``/archive/refs/tags/{ref}.zip``   (explicit tag)
+
+    We also keep the legacy ``main.zip`` fallback for repositories that renamed their
+    default branch to ``main`` after being created with ``master`` (or vice-versa) so
+    that the GitHub API default_branch value is momentarily stale.
+
+    Fallback order tried in sequence until one returns HTTP 200:
+      1. ``/archive/{ref}.zip``              — short form, works for unambiguous refs
+      2. ``/archive/refs/heads/{ref}.zip``   — unambiguous branch (fixes HTTP 300)
+      3. ``/archive/refs/tags/{ref}.zip``    — unambiguous tag  (fixes HTTP 300)
+      4. ``/archive/main.zip``               — legacy branch-rename fallback
+
     Parameters
     ----------
-    repo_ref: link to branch of the repo
+    repo_ref: default branch (or tag) returned by the GitHub API
     repo_name: name of the repo
     owner: GitHub owner
     directory: directory where to extract all downloaded files
@@ -802,46 +952,45 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
 
     Returns
     -------
-    path to the folder where all files have been downloaded
+    Path to the folder where all files have been downloaded, or None on failure.
     """
-    # download the repo at the selected branch with the link
-    repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/{repo_ref}.zip"
-    logging.info(f"Downloading {repo_archive_url}")
- 
-    repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
 
-    if repo_download is None:
-        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content lenght.")
-        return None
-    
-    if repo_download.status_code == 300:
-        logging.warning(f"Ambiguous ref detected for {repo_ref}, trying tags/heads resolution")
+    # Candidate archive URLs tried in order.  We start with the short form because it
+    # works for the vast majority of repos and avoids an extra HTTP round-trip.  When
+    # that returns 300 (ambiguous ref) or 404 (ref not found), we escalate to the
+    # fully-qualified refs/heads/ and refs/tags/ forms before falling back to main.
 
-        for ref_type in ["tags", "heads"]:
-            repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/refs/{ref_type}/{repo_ref}.zip"
-            logging.info(f"Trying to download {repo_archive_url}")
-
-            repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
-
-            if repo_download is None:
-                    logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content length.")
-                    return None
-
-            if repo_download.status_code == 200:
-                break
-
-    if repo_download.status_code == 404:
-        logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
-        repo_archive_url = f"https://github.com/{owner}/{repo_name}/archive/main.zip"
-        logging.info(f"Trying to download {repo_archive_url}")
-        repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization))
+    candidate_urls = [
+        f"https://github.com/{owner}/{repo_name}/archive/{repo_ref}.zip",
+        f"https://github.com/{owner}/{repo_name}/archive/refs/heads/{repo_ref}.zip",
+        f"https://github.com/{owner}/{repo_name}/archive/refs/tags/{repo_ref}.zip",
+        f"https://github.com/{owner}/{repo_name}/archive/main.zip",
+    ]
+    repo_download = None
+    repo_archive_url = None
+    for repo_archive_url in candidate_urls:
+        logging.info(f"Downloading {repo_archive_url}")
+        repo_download, date = rate_limit_get(repo_archive_url, headers=header_template(authorization),size_limit_mb=download_limit)
         if repo_download is None:
-            logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or not content lenght.")
+            # Size limit exceeded or streaming error — no point trying other URLs
+            logging.warning(
+                f"Repository archive skipped due to size limit: "
+                f"{constants.SIZE_DOWNLOAD_LIMIT_MB} MB or no content-length."
+            )
             return None
         
-    if repo_download.status_code != 200:
-        logging.error(f"Error: Archive request failed with HTTP {repo_download.status_code}")
-        return None
+        if repo_download.status_code == 200:
+            break
+        logging.warning(
+            f"Archive URL {repo_archive_url} returned HTTP {repo_download.status_code}, "
+            f"trying next fallback..."
+        )
+    if repo_download is None or repo_download.status_code != 200:
+            logging.error(
+                f"All archive download attempts failed for {owner}/{repo_name} "
+                f"(last status: {getattr(repo_download, 'status_code', 'N/A')})"
+            )
+            return None
 
     repo_zip = repo_download.content
 
@@ -868,7 +1017,7 @@ def download_github_files(directory, owner, repo_name, repo_ref, authorization):
     return repo_dir
 
 
-def get_project_id(repository_url,self_hosted):
+def get_project_id(repository_url,self_hosted, authorization=None,  use_config=True):
     """
     Function to download a repository, given its URL
     Parameters:
@@ -879,7 +1028,9 @@ def get_project_id(repository_url,self_hosted):
     """
 
     logging.info(f"Downloading {repository_url}")
-    response = requests.get(repository_url)
+    # response = requests.get(repository_url)
+    headers = gitlab_header_template(authorization, use_config=use_config)
+    response = requests.get(repository_url, headers=headers)
     project_id = "-1"
 
     if self_hosted:
@@ -908,14 +1059,15 @@ def get_project_id(repository_url,self_hosted):
                 project_id = response_str[start:end]
     return project_id
 
-def get_all_gitlab_releases(repo_api_base_url):
+def get_all_gitlab_releases(repo_api_base_url, authorization=None):
     all_releases = []
     page = 1
 
     while True:
         url = f"{repo_api_base_url}/releases?page={page}&per_page=100"
         logging.info(f"Getting releases from: {url}")
-        response = requests.get(url)
+        headers = gitlab_header_template(authorization)
+        response = requests.get(url, headers=headers)
         logging.info(f"Response: {response.status_code}")
         content_type = response.headers.get("Content-Type", "")
         if response.status_code != 200 or "application/json" not in content_type:
@@ -957,7 +1109,7 @@ def get_all_gitlab_releases(repo_api_base_url):
     # print(release_list_filtered)
     return all_releases
 
-def get_gitlab_releases(project_id, base_url):
+def get_gitlab_releases(project_id, base_url, authorization=None):
     """
         Retrieves the releases of a GitLab repository without authentication.
         
@@ -969,8 +1121,9 @@ def get_gitlab_releases(project_id, base_url):
 
     logging.info(f"Getting releases from: {releases_url}")
 
-    response = requests.get(releases_url)
-    
+    headers = gitlab_header_template(authorization)
+    response = requests.get(releases_url, headers=headers)
+
     if response.status_code != 200:
         logging.error(f"Error getting releases: {response.text}")
         return []
@@ -1023,7 +1176,7 @@ def get_all_paginated_results(base_url, headers, per_page=100):
         if response is None:
             logging.warning(f"Skipping page {page}: rate_limit_get returned None (size limit or network error)")
             break
-        
+
         if response.status_code != 200:
             logging.warning(f"GitHub API error on page {page}: {response.status_code}")
             break
@@ -1032,7 +1185,602 @@ def get_all_paginated_results(base_url, headers, per_page=100):
         if not page_data:
             break  # No more results
 
-        all_results.extend(page_data)
+        if isinstance(page_data, dict):
+            items = page_data.get("values", [])
+            if not items:
+                break
+            all_results.extend(items)
+        else:
+            all_results.extend(page_data)
         page += 1
 
     return all_results
+
+
+def load_codeberg_repository_metadata(repo_metadata: Result, repository_url, authorization=None, ignore_api_metadata=False, commit=None):
+    logging.info(f"Loading Repository {repository_url} Information....")
+
+    file_paths = configuration.get_configuration_file()
+    headers = codeberg_header_template(authorization)
+
+    if repository_url[-1] == '/':
+        repository_url = repository_url[:-1]
+    url = urlparse(repository_url)
+
+    path_components = [p for p in url.path.split('/') if p]
+    if len(path_components) < 2:
+        logging.error("Codeberg link is not correct. Expected https://codeberg.org/<owner>/<repo>")
+        return repo_metadata, "", "", "", ""
+
+    owner = path_components[0]
+    repo_name = path_components[1]
+    default_branch = None
+
+    if len(path_components) >= 4 and path_components[2] == "tree":
+        default_branch = path_components[3]
+
+    repo_api_url = f"{constants.CODEBERG_API}/{owner}/{repo_name}"
+    # resp = requests.get(repo_api_url)
+    resp, _ = rate_limit_get(repo_api_url, headers=headers)
+    if resp.status_code != 200:
+        logging.error(f"Error fetching Codeberg repository: {resp.status_code}")
+        return repo_metadata, "", "", "", ""
+    general_resp = resp.json()
+
+    if default_branch is None:
+        default_branch = general_resp.get('default_branch', 'main')
+    if commit: 
+        default_branch = commit
+
+    filtered_resp = do_crosswalk(general_resp, constants.codeberg_crosswalk_table)
+    if 'html_url' in general_resp:
+        filtered_resp[constants.CAT_ISSUE_TRACKER] = f"{general_resp['html_url']}/issues"
+
+    filtered_resp[constants.CAT_DOWNLOAD_URL] = f"https://codeberg.org/{owner}/{repo_name}/releases"
+
+    detected_license_info = None
+    for license_filename in ["LICENSE", "LICENSE.md", "LICENCE", "COPYING"]:
+        license_url = f"{constants.CODEBERG_API}/{owner}/{repo_name}/contents/{license_filename}?ref={default_branch}"
+        lic_resp, _ = rate_limit_get(license_url, headers=headers)
+        if lic_resp.status_code == 200:
+            lic_data = lic_resp.json()
+            raw_b64 = lic_data.get("content", "")
+            if raw_b64:
+                license_text = base64.b64decode(raw_b64).decode("utf-8")
+                license_info = detect_license_spdx(license_text, 'JSON')
+                if license_info:
+                    result = {
+                        constants.PROP_VALUE: license_info["spdx_id"],
+                        constants.PROP_NAME: license_info["name"],
+                        constants.PROP_SPDX_ID: license_info["spdx_id"],
+                        constants.PROP_TYPE: "License",
+                        constants.PROP_URL: license_info["url"],
+                        constants.PROP_IDENTIFIER: license_info["identifier"],
+                        
+                    }
+                    repo_metadata.add_result(constants.CAT_LICENSE, result, 1, constants.TECHNIQUE_CODEBERG_API)
+                    break
+
+    for category, value in filtered_resp.items():
+        value_type = constants.STRING
+        if category in constants.all_categories:
+            if category == constants.CAT_ISSUE_TRACKER:
+                value = value.replace("{/number}", "") if isinstance(value, str) else value
+            if category == constants.CAT_OWNER:
+                value_type = "User" 
+            if category == constants.CAT_KEYWORDS:
+                value = '%s,' % (', '.join(value))
+                value = value.rstrip(',')
+            if category in [constants.CAT_CODE_REPOSITORY, constants.CAT_ISSUE_TRACKER,
+                            constants.CAT_DOWNLOAD_URL, constants.CAT_HOMEPAGE]:
+                value_type = constants.URL
+            if category in [constants.CAT_DATE_CREATED, constants.CAT_DATE_UPDATED]:
+                value_type = constants.DATE
+            if category in [constants.CAT_FORK_COUNTS, constants.CAT_STARS]:
+                value_type = constants.NUMBER
+        
+
+            result = {
+                constants.PROP_VALUE: value,
+                constants.PROP_TYPE: value_type
+            }
+            if result['value']:
+                repo_metadata.add_result(category, result, 1, constants.TECHNIQUE_CODEBERG_API)
+
+    if 'languages_url' in filtered_resp:
+        lang_resp, _ = rate_limit_get(filtered_resp['languages_url'], headers=headers)
+        if lang_resp.status_code == 200:
+            languages = lang_resp.json()
+            for l, s in languages.items():
+                result = {
+                    constants.PROP_VALUE: l,
+                    constants.PROP_NAME: l,
+                    constants.PROP_TYPE: constants.LANGUAGE,
+                    constants.PROP_SIZE: s,
+                }
+                repo_metadata.add_result(constants.CAT_PROGRAMMING_LANGUAGES, result, 1,
+                                         constants.TECHNIQUE_CODEBERG_API)
+
+    releases_url = f"{constants.CODEBERG_API}/{owner}/{repo_name}/releases"
+    releases_resp, _ = rate_limit_get(releases_url, headers=headers)
+    if releases_resp.status_code == 200:
+        releases_list = releases_resp.json()
+        release_list_filtered = [do_crosswalk(r, constants.release_codeberg_crosswalk_table) 
+                                 for r in releases_list]
+        for release in release_list_filtered:
+            release_obj = {
+                constants.PROP_TYPE: constants.RELEASE,
+                constants.PROP_VALUE: release.get(constants.PROP_URL, "")
+            }
+            for category, value in release.items():
+                if category == constants.PROP_AUTHOR:
+                    value = {
+                        constants.PROP_NAME: value,
+                        constants.PROP_TYPE: release.get(constants.AGENT_TYPE, "Person")
+                    }
+                if value:
+                    release_obj[category] = value
+                if category == constants.CAT_ASSETS and isinstance(value, list):
+                    assets_filtered = [do_crosswalk(a, constants.release_assets_codeberg) for a in value]
+                    key_mapping = {
+                        constants.PROP_BROWSER_URL: constants.PROP_CONTENT_URL,
+                        constants.PROP_SIZE: constants.PROP_CONTENT_SIZE,
+                        constants.PROP_CONTENT_TYPE: constants.PROP_ENCODING_FORMAT,
+                        constants.PROP_DATE_CREATED_AT: constants.PROP_UPLOAD_DATE
+                    }
+                    assets_filtered = [{key_mapping.get(k, k): v for k, v in a.items()} for a in assets_filtered]
+                    release_obj[category] = assets_filtered
+            repo_metadata.add_result(constants.CAT_RELEASES, release_obj, 1, constants.TECHNIQUE_CODEBERG_API)
+
+    if not ignore_api_metadata and commit:
+        repo_metadata = fetch_commit_metadata(
+            repo_metadata, constants.RepositoryType.CODEBERG, commit, headers,
+            repo_api_base_url=repo_api_url
+        )
+    logging.info("Repository information successfully loaded.\n")
+    return repo_metadata, owner, repo_name, default_branch, "/".join(path_components)
+
+
+def download_codeberg_files(directory, owner, repo_name, repo_branch, authorization=None, download_limit=None):
+    """
+    Download all repository files from a Codeberg repository.
+    """
+    repo_archive_url = f"https://codeberg.org/{owner}/{repo_name}/archive/{repo_branch}.zip"
+    logging.info(f"Downloading {repo_archive_url}")
+
+    headers = codeberg_header_template(authorization)
+
+    repo_download, _ = rate_limit_get(repo_archive_url, headers=headers, size_limit_mb=download_limit)
+    if repo_download is None:
+        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or no content-length")
+        return None
+    if repo_download.status_code != 200:
+        logging.error(f"Error downloading Codeberg archive: HTTP {repo_download.status_code}")
+        return None
+
+    repo_zip = repo_download.content
+
+    repo_name_full = owner + "_" + repo_name
+    repo_zip_file = os.path.join(directory, repo_name_full + ".zip")
+    repo_extract_dir = os.path.join(directory, repo_name_full)
+
+    with open(repo_zip_file, "wb") as f:
+        f.write(repo_zip)
+
+    try:
+        with zipfile.ZipFile(repo_zip_file, "r") as zip_ref:
+            zip_ref.extractall(repo_extract_dir)
+    except zipfile.BadZipFile:
+        logging.error("Downloaded archive is not a valid zip")
+        return None
+
+    repo_folders = os.listdir(repo_extract_dir)
+    if not repo_folders:
+        logging.warning("Repository archive is empty")
+        return None
+
+    repo_dir = os.path.join(repo_extract_dir, repo_folders[0])
+    return repo_dir
+
+
+def gitlab_header_template(authorization=None, use_config=True):
+    header = {}
+    file_paths = configuration.get_configuration_file()
+    if authorization is not None:
+        header[constants.PROP_AUTHORIZATION] = authorization
+        logging.info("GitLab: using authorization token passed directly")   
+    elif use_config and constants.CONF_GITLAB_AUTHORIZATION in file_paths:
+        header[constants.PROP_AUTHORIZATION] = file_paths[constants.CONF_GITLAB_AUTHORIZATION]
+        logging.info("GitLab: authorization token found in config")
+    return header
+
+def codeberg_header_template(authorization=None):
+    header = {}
+    file_paths = configuration.get_configuration_file()
+    if authorization is not None:
+        header[constants.PROP_AUTHORIZATION] = authorization
+        logging.info("Codeberg: using authorization token passed directly")
+    elif constants.CONF_CODEBERG_AUTHORIZATION in file_paths:
+        header[constants.PROP_AUTHORIZATION] = file_paths[constants.CONF_CODEBERG_AUTHORIZATION]
+        logging.info("Codeberg: authorization token found in config")
+    return header
+
+
+def bitbucket_header_template(authorization=None):
+    header = {}
+    file_paths = configuration.get_configuration_file()
+    if authorization is not None:
+        header[constants.PROP_AUTHORIZATION] = authorization
+        logging.info("Bitbucket: using authorization token passed directly")
+    elif constants.CONF_BITBUCKET_AUTHORIZATION in file_paths:
+        header[constants.PROP_AUTHORIZATION] = file_paths[constants.CONF_BITBUCKET_AUTHORIZATION]
+        logging.info("Bitbucket: authorization token found in config")
+    return header
+
+
+def load_bitbucket_repository_metadata(repo_metadata: Result, repository_url, authorization=None, ignore_api_metadata=False, commit=None):
+    logging.info(f"Loading Repository {repository_url} Information....")
+    if repository_url[-1] == '/':
+        repository_url = repository_url[:-1]
+    url = urlparse(repository_url)
+
+    path_components = [p for p in url.path.split('/') if p]
+    if len(path_components) < 2:
+        logging.error("Bitbucket link is not correct. Expected https://bitbucket.org/<workspace>/<repo_slug>")
+        return repo_metadata, "", "", "", ""
+
+    owner = path_components[0]
+    repo_name = path_components[1]
+    default_branch = None
+
+    if len(path_components) >= 4 and path_components[2] == "tree":
+        default_branch = path_components[3]
+
+    # API call
+    repo_api_url = f"{constants.BITBUCKET_API}/{owner}/{repo_name}"
+    headers = bitbucket_header_template(authorization)
+    resp, _ = rate_limit_get(repo_api_url, headers=headers)
+    if resp.status_code != 200:
+        logging.error(f"Error fetching Bitbucket repository: {resp.status_code}")
+        return repo_metadata, "", "", "", ""
+    general_resp = resp.json()
+
+    if default_branch is None:
+        default_branch = general_resp.get('mainbranch', {}).get('name', 'main')
+
+    if commit: 
+        default_branch = commit
+
+    filtered_resp = do_crosswalk(general_resp, constants.bitbucket_crosswalk_table)
+
+    if constants.CAT_OWNER not in filtered_resp or not filtered_resp[constants.CAT_OWNER]:
+        owner_obj = general_resp.get('owner', {})
+        owner_val = owner_obj.get('nickname') or owner_obj.get('username')
+        if owner_val:
+            filtered_resp[constants.CAT_OWNER] = owner_val
+
+    # Issue tracker
+    if general_resp.get('has_issues', False) and 'links' in general_resp and 'html' in general_resp['links']:
+        html_url = general_resp['links']['html']['href']
+        filtered_resp[constants.CAT_ISSUE_TRACKER] = f"{html_url}/issues"
+
+
+    if 'language' in general_resp and general_resp['language']:
+        lang_value = general_resp['language']
+        result = {
+            constants.PROP_VALUE: lang_value,
+            constants.PROP_NAME: lang_value,
+            constants.PROP_TYPE: constants.LANGUAGE,
+        }
+        repo_metadata.add_result(constants.CAT_PROGRAMMING_LANGUAGES, result, 1,
+                                  constants.TECHNIQUE_BITBUCKET_API)
+
+  
+    if 'links' in general_resp and 'html' in general_resp['links']:
+        filtered_resp[constants.CAT_DOWNLOAD_URL] = f"{general_resp['links']['html']['href']}/downloads"
+
+    for category, value in filtered_resp.items():
+        value_type = constants.STRING
+        if category in constants.all_categories:
+            if category == constants.CAT_OWNER:
+                value_type = "User"
+            if category in [constants.CAT_CODE_REPOSITORY, constants.CAT_ISSUE_TRACKER,
+                            constants.CAT_DOWNLOAD_URL, constants.CAT_HOMEPAGE, constants.CAT_FORKS_URLS]:
+                value_type = constants.URL
+            if category in [constants.CAT_DATE_CREATED, constants.CAT_DATE_UPDATED]:
+                value_type = constants.DATE
+            if category == constants.CAT_PROGRAMMING_LANGUAGES:
+                value_type = constants.LANGUAGE
+
+            result = {
+                constants.PROP_VALUE: value,
+                constants.PROP_TYPE: value_type
+            }
+            if result['value']:
+                repo_metadata.add_result(category, result, 1, constants.TECHNIQUE_BITBUCKET_API)
+
+    # Releases from /refs/tags
+    tags_url = f"{constants.BITBUCKET_API}/{owner}/{repo_name}/refs/tags"
+    tags_resp, _ = rate_limit_get(tags_url, headers=headers)
+    if tags_resp.status_code == 200:
+        tags_data = tags_resp.json()
+        tags_list = tags_data.get('values', [])
+        for tag in tags_list:
+            release_obj = do_crosswalk(tag, constants.release_bitbucket_crosswalk_table)
+            release_obj[constants.PROP_TYPE] = constants.RELEASE
+            release_obj[constants.PROP_VALUE] = tag.get('name', '')
+            repo_metadata.add_result(constants.CAT_RELEASES, release_obj, 1,
+                                      constants.TECHNIQUE_BITBUCKET_API)
+            
+    if not ignore_api_metadata and commit:
+        repo_metadata = fetch_commit_metadata(
+            repo_metadata, constants.RepositoryType.BITBUCKET, commit, headers,
+            repo_api_base_url=repo_api_url
+        )
+    logging.info("Repository information successfully loaded.\n")
+    return repo_metadata, owner, repo_name, default_branch, "/".join(path_components)
+
+
+def download_bitbucket_files(directory, owner, repo_name, repo_branch, authorization=None,download_limit=None):
+    repo_archive_url = f"https://bitbucket.org/{owner}/{repo_name}/get/{repo_branch}.zip"
+    logging.info(f"Downloading {repo_archive_url}")
+
+    headers = bitbucket_header_template(authorization)
+    repo_download, _ = rate_limit_get(repo_archive_url, headers=headers, size_limit_mb=download_limit)
+    if repo_download is None:
+        logging.warning(f"Repository archive skipped due to size limit: {constants.SIZE_DOWNLOAD_LIMIT_MB} MB or no content-length")
+        return None
+    if repo_download.status_code != 200:
+        logging.error(f"Error downloading Bitbucket archive: HTTP {repo_download.status_code}")
+        return None
+
+    repo_zip = repo_download.content
+
+    repo_name_full = owner + "_" + repo_name
+    repo_zip_file = os.path.join(directory, repo_name_full + ".zip")
+    repo_extract_dir = os.path.join(directory, repo_name_full)
+
+    with open(repo_zip_file, "wb") as f:
+        f.write(repo_zip)
+
+    try:
+        with zipfile.ZipFile(repo_zip_file, "r") as zip_ref:
+            zip_ref.extractall(repo_extract_dir)
+    except zipfile.BadZipFile:
+        logging.error("Downloaded archive is not a valid zip")
+        return None
+
+    repo_folders = os.listdir(repo_extract_dir)
+    if not repo_folders:
+        logging.warning("Repository archive is empty")
+        return None
+
+    repo_dir = os.path.join(repo_extract_dir, repo_folders[0])
+    return repo_dir
+
+
+def fetch_commit_metadata(repository_metadata, repo_type, commit_sha, headers,
+                          repo_api_base_url=None, project_api_url=None):
+    """
+    Fetches metadata for a specific commit from the GitHub or GitLab API and
+    adds it to the repository metadata.
+    Parameters
+    ----------
+    @param repository_metadata: Result object to store the findings
+    @param repo_type: type of the repository (GITHUB or GITLAB)
+    @param commit_sha: The commit SHA to fetch metadata for
+    @param headers: HTTP headers to use for the request
+    @param repo_api_base_url: Base URL of the GitHub repository API (e.g. https://api.github.com/repos/owner/repo)
+    @param project_api_url: Base URL of the GitLab project API (e.g. https://gitlab.com/api/v4/projects/123)
+    Returns
+    -------
+    @return: Result object enriched with commit metadata
+    """
+
+    if repo_type == constants.RepositoryType.GITLAB:
+        if not project_api_url:
+            logging.warning("No project API URL provided for GitLab commit metadata fetch.")
+            return repository_metadata
+        commit_url = f"{project_api_url}/repository/commits/{commit_sha}"
+        is_gitlab = True
+        technique = constants.TECHNIQUE_GITLAB_API
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        commit_url = f"{repo_api_base_url}/commit/{commit_sha}"
+        is_gitlab = False
+        technique = constants.TECHNIQUE_BITBUCKET_API
+    elif repo_type == constants.RepositoryType.CODEBERG:
+        commit_url = f"{repo_api_base_url}/git/commits/{commit_sha}"
+        is_gitlab = False
+        technique = constants.TECHNIQUE_CODEBERG_API
+    else:
+        commit_url = f"{repo_api_base_url}/commits/{commit_sha}"
+        is_gitlab = False
+        technique = constants.TECHNIQUE_GITHUB_API
+
+    logging.info(f"Fetching commit metadata from {commit_url}")
+    commit_resp, _ = rate_limit_get(commit_url, headers=headers)
+    if commit_resp is None:
+        logging.warning("Skipping commit metadata: rate_limit_get returned None (size limit or network error)")
+        return repository_metadata
+    if commit_resp.status_code != 200:
+        logging.warning(f"Could not fetch commit metadata: HTTP {commit_resp.status_code}")
+        return repository_metadata
+    commit_data = commit_resp.json()
+
+    # Extract commit metadata since fields differ between GitHub and GitLab
+    author_name = None
+    commit_date_str = None
+    commit_html_url = None
+    if is_gitlab:
+        author_name = commit_data.get("author_name")
+        commit_date_str = commit_data.get("authored_date") or commit_data.get("committed_date")
+        commit_html_url = commit_data.get("web_url")
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        author_data = commit_data.get("author", {})
+        author_name = author_data.get("nickname") or (author_data.get("user") or {}).get("nickname")
+        commit_date_str = commit_data.get("date")
+        commit_html_url = (commit_data.get("links") or {}).get("html", {}).get("href")
+    else:
+        commit_details = commit_data.get("commit", {})
+        commit_author = commit_data.get("author", {})
+        if commit_author and commit_author.get("login"):
+            author_name = commit_author["login"]
+        elif commit_details.get("author") and commit_details["author"].get("name"):
+            author_name = commit_details["author"]["name"]
+        if commit_details.get("author") and commit_details["author"].get("date"):
+            commit_date_str = commit_details["author"]["date"]
+        elif commit_details.get("committer") and commit_details["committer"].get("date"):
+            commit_date_str = commit_details["committer"]["date"]
+        commit_html_url = commit_data.get("html_url")
+
+    if author_name:
+        author_result = {
+            constants.PROP_VALUE: author_name,
+            constants.PROP_TYPE: constants.AGENT
+        }
+        repository_metadata.add_result(constants.CAT_AUTHORS, author_result, 1, technique)
+
+    if commit_date_str:
+        date_result = {
+            constants.PROP_VALUE: commit_date_str,
+            constants.PROP_TYPE: constants.DATE
+        }
+        repository_metadata.add_result(constants.CAT_DATE_CREATED, date_result, 1, technique)
+
+    if commit_html_url:
+        url_result = {
+            constants.PROP_VALUE: commit_html_url,
+            constants.PROP_TYPE: constants.URL,
+            constants.PROP_COMMIT: commit_sha
+        }
+        repository_metadata.add_result(constants.CAT_CODE_REPOSITORY, url_result, 1, technique)
+
+    # Resolve release tags to commit SHAs and store them on each release entry
+    repository_metadata = resolve_release_commits(
+        repository_metadata, repo_type, headers,
+        repo_api_base_url=repo_api_base_url, project_api_url=project_api_url
+    )
+
+    # In here, we keep only releases whose date is at or before the commit date. This will guarantee that the output JSON 
+    # contains the releases that existed up to the point in time of the requested commit, 
+    # with the closest one sitting at the end of the list. 
+    # In some edge cases, like the commit is after ALL releases, we would keep the list of releases as it is. 
+    
+    if commit_date_str and constants.CAT_RELEASES in repository_metadata.results:
+        try:
+            commit_dt = datetime.fromisoformat(commit_date_str[:19])
+            filtered = []
+            closest_release_date = None
+            closest_release_tag = None
+            next_release_date = None
+            next_release_tag = None
+            found_closest = False
+            for release in repository_metadata.results[constants.CAT_RELEASES]:
+                release_result = release.get(constants.PROP_RESULT, {})
+                release_date = release_result.get(constants.PROP_DATE_CREATED)
+                if release_date is None:
+                    release_date = release_result.get(constants.PROP_DATE_PUBLISHED)
+                if release_date is None:
+                    continue
+                try:
+                    release_dt = datetime.fromisoformat(release_date[:19])
+                except (ValueError, TypeError):
+                    continue
+                if release_dt <= commit_dt:
+                    filtered.append(release)
+                    if not found_closest:
+                        found_closest = True
+                        closest_release_date = release_date
+                        closest_release_tag = release_result.get(constants.PROP_TAG, release_result.get(constants.PROP_NAME, "unknown"))
+                else:
+                    if next_release_date is None:
+                        next_release_date = release_date
+                        next_release_tag = release_result.get(constants.PROP_TAG, release_result.get(constants.PROP_NAME, "unknown"))
+            if filtered:
+                repository_metadata.results[constants.CAT_RELEASES] = filtered
+                if found_closest:
+                    msg = f"Closest release behind commit date found. Commit date: {commit_date_str}. Matched release: {closest_release_tag} (date: {closest_release_date})."
+                    if next_release_tag:
+                        msg += f" Next release: {next_release_tag} (date: {next_release_date})."
+                    logging.info(msg)
+            else:
+                logging.warning("All releases are after the commit date; keeping the unfiltered release list.")
+        except (ValueError, TypeError) as e:
+            logging.warning(f"Could not parse commit date for filtering releases: {e}")
+
+    logging.info("Commit metadata successfully loaded.")
+    return repository_metadata
+
+def resolve_release_commits(repository_metadata, repo_type, headers,
+                            repo_api_base_url=None, project_api_url=None):
+    """
+    Resolves the commit SHA for each release's tag using the GitHub or GitLab
+    tags API and stores the SHA directly on each release result dict.
+
+    Parameters
+    ----------
+    @param repository_metadata: Result object containing releases loaded from the API
+    @param repo_type: type of the repository (GITHUB or GITLAB)
+    @param headers: HTTP headers to use for the request
+    @param repo_api_base_url: Base URL of the GitHub repository API (e.g. https://api.github.com/repos/owner/repo)
+    @param project_api_url: Base URL of the GitLab project API (e.g. https://gitlab.com/api/v4/projects/123)
+    Returns
+    -------
+    @return: Result object with release entries enriched with commit SHAs (when resolvable)
+    """
+    if repo_type == constants.RepositoryType.GITLAB:
+        if not project_api_url:
+            logging.warning("No project API URL provided for GitLab tag resolution.")
+            return repository_metadata
+        tags_url = f"{project_api_url}/repository/tags"
+        is_gitlab = True
+    elif repo_type == constants.RepositoryType.BITBUCKET:
+        tags_url = f"{repo_api_base_url}/refs/tags"
+        is_gitlab = False
+    else:
+        tags_url = f"{repo_api_base_url}/tags"
+        is_gitlab = False
+
+    # Retrieve all tags from the paginated /tags endpoint
+    logging.info(f"Resolving release tags to commit SHAs via {tags_url}")
+    all_tags = get_all_paginated_results(tags_url, headers=headers)
+    if not all_tags:
+        logging.warning("No tags found, cannot resolve release commits.")
+        return repository_metadata
+
+    # Build a mapping from tag name to commit SHA
+    tag_to_sha = {}
+    for tag_entry in all_tags:
+        tag_name = tag_entry.get("name")
+        commit_info = tag_entry.get("commit")
+        if tag_name and commit_info:
+            if is_gitlab:
+                sha = commit_info.get("id")
+            else:
+                sha = commit_info.get("sha")
+            if sha:
+                tag_to_sha[tag_name] = sha
+        elif tag_name and repo_type == constants.RepositoryType.BITBUCKET:
+            sha = tag_entry.get("target", {}).get("hash")
+            if sha:
+                tag_to_sha[tag_name] = sha
+
+    if not tag_to_sha:
+        return repository_metadata
+
+    # Walk through existing releases and add the commit SHA when the tag matches
+    if constants.CAT_RELEASES not in repository_metadata.results:
+        return repository_metadata
+
+    for release_entry in repository_metadata.results[constants.CAT_RELEASES]:
+        release_result = release_entry.get(constants.PROP_RESULT)
+        if release_result is None:
+            continue
+        tag_name = release_result.get(constants.PROP_TAG)
+        if tag_name is None:
+            continue
+        commit_sha = tag_to_sha.get(tag_name)
+        if commit_sha is not None:
+            release_result[constants.PROP_COMMIT] = commit_sha
+
+    return repository_metadata

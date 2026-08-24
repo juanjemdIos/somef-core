@@ -174,7 +174,7 @@ def parse_pom_file(file_path, metadata_result: Result, source):
                         "value": f'{dependency.get("groupId", "")}.{dependency.get("artifactId", "")}'.strip("."),
                         "name": name_d,
                         "version": version_d,
-                        "type": constants.SOFTWARE_APPLICATION,
+                        "type": constants.SOFTWARE_DEPENDENCY,
                         "dependency_type": dep_type,
                         "dependency_resolver": "maven"
                     },
@@ -378,7 +378,11 @@ def parse_runtime_platform(properties_node):
 
         if not text:
             continue
-        
+        # if tag.startswith(f"{{{POM_NAMESPACE}}}") and tag.endswith(".version") and child.text:
+        #     print('entramos')
+        #     runtime_name = tag.split("}")[-1].split(".")[0].capitalize()
+        #     version_value = child.text.strip()
+        #     runtimes.append({"value": f'{runtime_name} {version_value}',"name": runtime_name, "version": version_value})
         if any(x in tag for x in ["java.version", "javaversion", "java_version"]):
             runtimes.append({
                 "name": "Java",
